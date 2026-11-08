@@ -4,6 +4,10 @@ JobFit AI compares one CV with a job description. It shows a match score, the sk
 
 There are no accounts and no application database. The profile, job draft, and recent reports stay in this browser.
 
+## Try it out
+
+[![Try it out](https://img.shields.io/badge/Try%20it%20out-f5c400?style=for-the-badge&labelColor=1a1403)](https://client-seven-lyart-30.vercel.app/)
+
 ## Motivation
 
 Job opportunities show up often on platforms such as LinkedIn. Working out whether a role matches your skills and experience, reading the requirements, and writing a tailored application email is often slow and difficult.

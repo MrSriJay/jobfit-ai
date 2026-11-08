@@ -135,7 +135,6 @@ export function SettingsPage() {
         ) : (
           <div className="stack">
             {builtinModel ? <p className="fine">{fill(m.settings.builtinModel, { model: builtinModel })}</p> : null}
-            <ModelSuggestions current={builtinModel} onChoose={chooseModel} />
             {configured === "missing" ? (
               <div className="banner warn">
                 <strong>{m.upload.keyTitle}</strong>
