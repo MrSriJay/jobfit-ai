@@ -3,17 +3,46 @@ import { useEffect, useState } from "react";
 const TIPS_KEY = "jobfit-tips-v1";
 const EVENT = "jobfit-tips";
 
-export function dismissTips(): void {
-  localStorage.setItem(TIPS_KEY, "1");
+function readDismissed(): Set<string> {
+  const raw = localStorage.getItem(TIPS_KEY);
+  if (raw === "1") return new Set(["all"]);
+  if (!raw) return new Set();
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.filter((item) => typeof item === "string"));
+  } catch {
+    return new Set();
+  }
+  return new Set();
+}
+
+function writeDismissed(ids: Set<string>): void {
+  localStorage.setItem(TIPS_KEY, JSON.stringify([...ids]));
   window.dispatchEvent(new Event(EVENT));
 }
 
-export function useFirstVisit(): boolean {
-  const [show, setShow] = useState(() => localStorage.getItem(TIPS_KEY) !== "1");
+export function resetTips(): void {
+  localStorage.removeItem(TIPS_KEY);
+  window.dispatchEvent(new Event(EVENT));
+}
+
+export function dismissTip(id: string): void {
+  const ids = readDismissed();
+  if (ids.has("all") || ids.has(id)) return;
+  ids.add(id);
+  writeDismissed(ids);
+}
+
+export function useTip(id: string): boolean {
+  const [dismissed, setDismissed] = useState(readDismissed);
   useEffect(() => {
-    const sync = () => setShow(localStorage.getItem(TIPS_KEY) !== "1");
+    const sync = () => setDismissed(readDismissed());
     window.addEventListener(EVENT, sync);
-    return () => window.removeEventListener(EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
-  return show;
+  return !dismissed.has("all") && !dismissed.has(id);
 }

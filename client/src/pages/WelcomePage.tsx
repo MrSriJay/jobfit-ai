@@ -2,6 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 
 import { Logo } from "../components/Logo";
+import { FlowTip } from "../components/Tooltip";
+import { dismissTip } from "../tips";
 import { useStore } from "../state";
 
 const steps = [
@@ -12,7 +14,7 @@ const steps = [
 
 export function WelcomePage() {
   const { snapshot } = useStore();
-  if (snapshot.profile && snapshot.cvFilename) {
+  if (snapshot.profile) {
     return <Navigate to="/upload" replace />;
   }
 
@@ -35,9 +37,11 @@ export function WelcomePage() {
           </li>
         ))}
       </ol>
-      <Link className="btn primary welcome-start" to="/upload">
-        Start here <ArrowRight size={18} />
-      </Link>
+      <FlowTip id="start" label="Start with a CV. You upload it once, then compare it with each job.">
+        <Link className="btn primary welcome-start" to="/upload" onClick={() => dismissTip("start")}>
+          Start here <ArrowRight size={18} />
+        </Link>
+      </FlowTip>
     </section>
   );
 }

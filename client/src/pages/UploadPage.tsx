@@ -1,25 +1,65 @@
-import { ArrowRight, FileText, FileUp, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, FileText, FileUp, LoaderCircle, PenLine, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { extractProfile, parseCv } from "../api";
 import { ProfileForm } from "../components/ProfileForm";
-import { Tooltip } from "../components/Tooltip";
+import { FlowTip, Tooltip } from "../components/Tooltip";
 import { useStore } from "../state";
-import { dismissTips, useFirstVisit } from "../tips";
+import { dismissTip } from "../tips";
+import type { CandidateProfile } from "../types";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
+function emptyProfile(): CandidateProfile {
+  return {
+    name: "",
+    email: "",
+    phone: [],
+    location: "",
+    links: [],
+    professionalSummary: "",
+    skills: [],
+    technologies: [],
+    experience: [],
+    education: [],
+    projects: [],
+    certifications: [],
+  };
+}
+
+function profileHasContent(profile: CandidateProfile): boolean {
+  return Boolean(
+    profile.name ||
+      profile.email ||
+      profile.phone.length ||
+      profile.location ||
+      profile.links.length ||
+      profile.professionalSummary ||
+      profile.skills.length ||
+      profile.technologies.length ||
+      profile.experience.length ||
+      profile.education.length ||
+      profile.projects.length ||
+      profile.certifications.length,
+  );
+}
+
 export function UploadPage() {
   const { configured, snapshot, profileNonce, saveProfile, clearCv, notify } = useStore();
-  const firstVisit = useFirstVisit();
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState<"parse" | "extract" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [parsed, setParsed] = useState<{ filename: string; characters: number; preview: string; text: string } | null>(null);
+  const [manual, setManual] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const manualRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (manual) manualRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [manual]);
 
   const takeFile = async (file: File | undefined) => {
     if (!file) return;
@@ -34,6 +74,7 @@ export function UploadPage() {
       setError(name.endsWith(".doc") ? "Save the CV as DOCX or PDF and upload that file." : "Upload a PDF or DOCX file.");
       return;
     }
+    dismissTip("upload");
     setBusy("parse");
     try {
       setParsed(await parseCv(file));
@@ -47,6 +88,7 @@ export function UploadPage() {
 
   const extract = async () => {
     if (!parsed) return;
+    dismissTip("extract");
     setBusy("extract");
     setError("");
     setNotice("");
@@ -66,19 +108,8 @@ export function UploadPage() {
 
   return (
     <section className="page">
-      <p className="eyebrow">Step 1</p>
       <h1>Upload CV</h1>
-      <p className="lede">Add a PDF or DOCX resume once. Later job checks reuse the saved profile.</p>
-      {firstVisit ? (
-        <div className="coach">
-          <strong>First time here</strong>
-          <p>Drop a text-based PDF or DOCX in the box. Extract sends that text to OpenAI, then the profile stays in this browser.</p>
-          <p>The gear at the top right holds saved matches. Clear local data removes them from this browser only.</p>
-          <button className="btn ghost" type="button" onClick={dismissTips}>
-            Got it
-          </button>
-        </div>
-      ) : null}
+      <p className="lede">Add a PDF or DOCX resume once, or type the profile yourself. Later job checks reuse it.</p>
 
       {configured === "missing" ? (
         <div className="banner danger">
@@ -105,8 +136,43 @@ export function UploadPage() {
         </div>
       ) : null}
 
-      {snapshot.profile ? null : (
-        <>
+      {snapshot.profile ? (
+        <div className="card">
+          <div className="profile-head">
+            <div>
+              <h2>Saved profile</h2>
+              {snapshot.cvFilename ? (
+                <p className="profile-file">
+                  <FileText size={15} aria-hidden="true" />
+                  <span>{snapshot.cvFilename}</span>
+                </p>
+              ) : null}
+            </div>
+            <Tooltip label={snapshot.cvFilename ? "Delete this CV and the saved profile" : "Delete the saved profile"}>
+              <button className="icon-button danger" type="button" aria-label={snapshot.cvFilename ? "Delete CV" : "Delete profile"} onClick={() => setConfirming(true)}>
+                <Trash2 size={16} />
+              </button>
+            </Tooltip>
+          </div>
+          <ProfileForm
+            key={profileNonce}
+            profile={snapshot.profile}
+            onSave={(profile) => {
+              saveProfile(profile);
+              notify("Profile saved");
+            }}
+            next={
+              <FlowTip id="next" block label="Check the profile, then continue. The next step is the job description.">
+                <Link className="btn primary" to="/job" onClick={() => dismissTip("next")}>
+                  Next <ArrowRight size={16} />
+                </Link>
+              </FlowTip>
+            }
+          />
+        </div>
+      ) : (
+        <div className="upload-flow">
+          <FlowTip id="upload" block above label="Drop a text-based PDF or DOCX here. This is the only upload. Later jobs reuse the profile.">
           <label
             className={over ? "drop over" : "drop"}
             onDragOver={(event) => {
@@ -134,6 +200,24 @@ export function UploadPage() {
             <strong>{over ? "Release to read the CV" : "Drop your CV here"}</strong>
             <span>or click to browse · PDF or DOCX · 10 MB</span>
           </label>
+          </FlowTip>
+
+          {manual ? null : (
+            <div className="manual-choice">
+              <span>or</span>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={() => {
+                  dismissTip("upload");
+                  setError("");
+                  setManual(true);
+                }}
+              >
+                <PenLine size={16} /> Add manually
+              </button>
+            </div>
+          )}
 
           {parsed ? (
             <div className="card file-card">
@@ -141,10 +225,12 @@ export function UploadPage() {
                 <strong>{parsed.filename}</strong>
                 <p>{parsed.characters.toLocaleString()} characters</p>
               </div>
-              <button className="btn primary" type="button" disabled={busy !== null} onClick={() => void extract()}>
-                {busy === "extract" ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-                Extract profile
-              </button>
+              <FlowTip id="extract" label="Extract reads the CV and fills the profile. Review it before you continue.">
+                <button className="btn primary" type="button" disabled={busy !== null} onClick={() => void extract()}>
+                  {busy === "extract" ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+                  Extract profile
+                </button>
+              </FlowTip>
             </div>
           ) : null}
           {parsed ? (
@@ -153,40 +239,33 @@ export function UploadPage() {
               <pre>{parsed.preview || "No text."}</pre>
             </details>
           ) : null}
-          <p className="fine">Extracting a profile sends the CV text to OpenAI. The profile is then saved in this browser, not in an application database.</p>
-        </>
-      )}
+          {manual && !parsed ? null : (
+            <p className="fine">Extracting a profile sends the CV text to OpenAI. The profile is then saved in this browser, not in an application database.</p>
+          )}
 
-      {snapshot.profile ? (
-        <div className="card">
+          {manual ? (
+        <div className="card" ref={manualRef}>
           <div className="profile-head">
             <div>
-              <h2>Saved profile</h2>
-              {snapshot.cvFilename ? (
-                <p className="profile-file">
-                  <FileText size={15} aria-hidden="true" />
-                  <span>{snapshot.cvFilename}</span>
-                </p>
-              ) : null}
+              <h2>Your profile</h2>
+              <p className="profile-file">Filled in by you. It stays in this browser.</p>
             </div>
-            <Tooltip label="Delete this CV and the saved profile">
-              <button className="icon-button danger" type="button" aria-label="Delete CV" onClick={() => setConfirming(true)}>
-                <Trash2 size={16} />
-              </button>
-            </Tooltip>
+            <button className="btn ghost" type="button" onClick={() => setManual(false)}>
+              Back
+            </button>
           </div>
           <ProfileForm
-            key={profileNonce}
-            profile={snapshot.profile}
+            profile={emptyProfile()}
             onSave={(profile) => {
+              if (!profileHasContent(profile)) {
+                setError("Add a name, a skill, or some experience before saving.");
+                setNotice("");
+                return;
+              }
+              setError("");
               saveProfile(profile);
               notify("Profile saved");
             }}
-            next={
-              <Link className="btn primary" to="/job">
-                Next <ArrowRight size={16} />
-              </Link>
-            }
           />
         </div>
       ) : (
@@ -194,16 +273,22 @@ export function UploadPage() {
           <Sparkles size={18} />
           <div>
             <strong>No profile yet</strong>
-            <p>Upload a CV to create a profile you can reuse for every job.</p>
+            <p>Upload a CV, or add the profile yourself, and reuse it for every job.</p>
           </div>
+        </div>
+          )}
         </div>
       )}
       {confirming
         ? createPortal(
             <div className="modal-back" role="presentation" onClick={() => setConfirming(false)}>
               <div className="modal" role="dialog" aria-labelledby="delete-cv-title" onClick={(event) => event.stopPropagation()}>
-                <h2 id="delete-cv-title">Delete this CV?</h2>
-                <p>This removes the saved CV and the profile from this browser. Match history stays until you clear local data.</p>
+                <h2 id="delete-cv-title">{snapshot.cvFilename ? "Delete this CV?" : "Delete this profile?"}</h2>
+                <p>
+                  {snapshot.cvFilename
+                    ? "This removes the saved CV and the profile from this browser. Match history stays until you clear local data."
+                    : "This removes the saved profile from this browser. Match history stays until you clear local data."}
+                </p>
                 <div className="row">
                   <button className="btn ghost" type="button" onClick={() => setConfirming(false)}>
                     Cancel
@@ -218,7 +303,7 @@ export function UploadPage() {
                       setConfirming(false);
                     }}
                   >
-                    <Trash2 size={16} /> Delete CV
+                    <Trash2 size={16} /> {snapshot.cvFilename ? "Delete CV" : "Delete profile"}
                   </button>
                 </div>
               </div>

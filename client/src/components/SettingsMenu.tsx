@@ -1,15 +1,17 @@
-import { History, Shield, Trash2, UserRound } from "lucide-react";
+import { History, Info, Shield, Trash2, UserRound } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import { useStore } from "../state";
+import { useOpenAbout } from "./AboutDialog";
 import { Tooltip } from "./Tooltip";
 
 export function SettingsMenu({ trigger }: { trigger: ReactNode }) {
   const { snapshot, selectAnalysis, clearAll } = useStore();
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const openAbout = useOpenAbout();
   const panelId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -77,6 +79,17 @@ export function SettingsMenu({ trigger }: { trigger: ReactNode }) {
             </div>
           )}
 
+          <button
+            className="btn ghost about-launch"
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              openAbout();
+            }}
+          >
+            <Info size={16} /> About
+          </button>
+
           <Tooltip label="Clears the saved CV, job draft, and match history in this browser. It does not delete anything from OpenAI.">
             <button
               className="btn danger"
@@ -100,7 +113,7 @@ export function SettingsMenu({ trigger }: { trigger: ReactNode }) {
             <div className="modal-back" role="presentation" onClick={() => setConfirming(false)}>
               <div className="modal" role="dialog" aria-labelledby="clear-title" onClick={(event) => event.stopPropagation()}>
                 <h2 id="clear-title">Clear local data</h2>
-                <p>This removes the CV profile, job draft, and analysis history stored in this browser.</p>
+                <p>This removes the CV profile, job draft, and analysis history stored in this browser. The walkthrough tips show again from the home page.</p>
                 <div className="row">
                   <button className="btn ghost" type="button" onClick={() => setConfirming(false)}>
                     Cancel
@@ -111,7 +124,7 @@ export function SettingsMenu({ trigger }: { trigger: ReactNode }) {
                     onClick={() => {
                       clearAll();
                       setConfirming(false);
-                      navigate("/upload");
+                      navigate("/", { replace: true });
                     }}
                   >
                     <Trash2 size={16} /> Clear data

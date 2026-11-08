@@ -1,21 +1,17 @@
-import { Briefcase, Moon, Settings, Sparkles, Sun, Upload } from "lucide-react";
+import { History, Moon, Plus, Settings, Sun, Upload, UserRound } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 
+import { useStore } from "../state";
 import { applyTheme, readTheme, type Theme } from "../theme";
-import { useFirstVisit } from "../tips";
 import { Logo } from "./Logo";
 import { SettingsMenu } from "./SettingsMenu";
-import { Tooltip } from "./Tooltip";
+import { FlowTip } from "./Tooltip";
 
-const links = [
-  { to: "/upload", label: "Upload CV", icon: Upload, end: false },
-  { to: "/job", label: "Job description", icon: Briefcase, end: false },
-  { to: "/analysis", label: "Match analysis", icon: Sparkles, end: false },
-];
+const links = [{ to: "/upload", label: "Profile", icon: UserRound }];
 
 export function TopBar() {
-  const firstVisit = useFirstVisit();
+  const { snapshot } = useStore();
   const [theme, setTheme] = useState<Theme>(() => readTheme());
   const light = theme === "light";
   const settingsButton = (
@@ -27,24 +23,39 @@ export function TopBar() {
   return (
     <header className="topbar">
       <Link className="brand" to="/" aria-label="JobFit home">
-        <Logo size={46} />
+        <Logo size={42} />
         <div>
           <strong className="wordmark"><span className="mark-job">Job</span><span className="mark-fit">Fit</span></strong>
           <small>CV to match</small>
         </div>
       </Link>
-      <nav className="nav" aria-label="Steps">
+      <nav className="nav" aria-label="Main">
         {links.map((link) => {
           const Icon = link.icon;
           return (
-            <NavLink key={link.to} to={link.to} end={link.end} className={({ isActive }) => (isActive ? "active" : "")}>
+            <NavLink key={link.to} to={link.to} className={({ isActive }) => (isActive ? "active" : "")}>
               <Icon size={16} aria-hidden="true" />
               {link.label}
             </NavLink>
           );
         })}
+        {snapshot.profile ? (
+          <NavLink to="/analysis" className={({ isActive }) => (isActive ? "active" : "")}>
+            <History size={16} aria-hidden="true" />
+            Analysis
+          </NavLink>
+        ) : null}
       </nav>
       <div className="settings-slot">
+        {snapshot.profile ? (
+          <Link className="btn primary upload-cta" to="/job" state={{ fresh: true }}>
+            <Plus size={16} /> New analysis
+          </Link>
+        ) : (
+          <Link className="btn primary upload-cta" to="/upload">
+            <Upload size={16} /> Upload CV
+          </Link>
+        )}
         <button
           className="icon-button"
           type="button"
@@ -60,13 +71,9 @@ export function TopBar() {
         </button>
         <SettingsMenu
           trigger={
-            firstVisit ? (
-              <Tooltip label="First visit: settings keeps saved matches. Clear local data removes them from this browser only.">
-                {settingsButton}
-              </Tooltip>
-            ) : (
-              settingsButton
-            )
+            <FlowTip id="settings" label="Settings keeps saved matches. Clear local data removes them from this browser only.">
+              {settingsButton}
+            </FlowTip>
           }
         />
       </div>

@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { apiStatus } from "./api";
-import { emptySnapshot, loadSnapshot, saveSnapshot, type Snapshot } from "./storage";
+import { emptySnapshot, loadSnapshot, MAX_HISTORY, saveSnapshot, type Snapshot } from "./storage";
+import { resetTips } from "./tips";
 import type { AnalysisRecord, CandidateProfile, JobPosting } from "./types";
 
 interface Store {
@@ -75,7 +76,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rememberAnalysis: (record) =>
         setSnapshot((current) => ({
           ...current,
-          history: [record, ...current.history.filter((item) => item.id !== record.id)].slice(0, 20),
+          history: [record, ...current.history.filter((item) => item.id !== record.id)].slice(0, MAX_HISTORY),
           currentAnalysisId: record.id,
         })),
       replaceAnalysis: (record) =>
@@ -86,6 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })),
       selectAnalysis: (id) => setSnapshot((current) => ({ ...current, currentAnalysisId: id })),
       clearAll: () => {
+        resetTips();
         setSnapshot(emptySnapshot());
         setProfileNonce((value) => value + 1);
         setNotice("Local data cleared");

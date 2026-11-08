@@ -1,13 +1,23 @@
-import { Copy, Download, ExternalLink, LoaderCircle, Mail, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Briefcase, Copy, Download, ExternalLink, LoaderCircle, Mail, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { regenerateEmail } from "../api";
+import { FlowTip } from "../components/Tooltip";
 import { buildReportPdf, downloadPdf, safeFilename } from "../pdf";
 import { useStore } from "../state";
+import { dismissTip } from "../tips";
 import { AREA_LABELS, AREA_ORDER, CRITERIA, GAP_LABELS, VERDICT_LABELS, type AnalysisRecord } from "../types";
 
 const MAILTO_LIMIT = 1800;
+const SECTIONS = [
+  ["overview", "Overview"],
+  ["scores", "Scores"],
+  ["skills", "Skills"],
+  ["advice", "Advice"],
+] as const;
+
+type SectionId = (typeof SECTIONS)[number][0];
 
 function mailto(subject: string, body: string): string | null {
   const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -15,29 +25,56 @@ function mailto(subject: string, body: string): string | null {
 }
 
 export function ResultsPage() {
-  const { snapshot, replaceAnalysis, notify } = useStore();
-  const record = snapshot.history.find((item) => item.id === snapshot.currentAnalysisId) ?? null;
+  const { snapshot, replaceAnalysis, selectAnalysis, notify } = useStore();
+  const [params] = useSearchParams();
+  const record = snapshot.history.find((item) => item.id === params.get("id")) ?? null;
 
   if (!record) {
     return (
       <section className="page">
-        <p className="eyebrow">Step 3</p>
         <h1>Match analysis</h1>
-        <div className="empty">
-          <Sparkles size={18} />
-          <div>
-            <strong>No analysis yet</strong>
-            <p>Analyze a job description to see a match report and an application email.</p>
+        {snapshot.history.length === 0 ? (
+          <div className="empty">
+            <Sparkles size={18} />
+            <div>
+              <strong>No analysis yet</strong>
+              <p>Analyze a job description to see a match report and an application email.</p>
+            </div>
           </div>
-        </div>
-        <Link className="btn primary" to="/job">
-          Enter a job description
-        </Link>
+        ) : (
+          <FlowTip id="history" block label="These are the matches saved in this browser. Open one to read the report.">
+            <div className="analysis-list">
+              {snapshot.history.map((item) => {
+                const company = item.job.company.trim();
+                return (
+                  <Link key={item.id} to={`/analysis?id=${encodeURIComponent(item.id)}`} onClick={() => selectAnalysis(item.id)}>
+                    <span className="analysis-icon" aria-hidden="true">
+                      <Briefcase size={18} />
+                    </span>
+                    <span className="analysis-copy">
+                      <strong>{item.job.title || "Untitled role"}</strong>
+                      <small>
+                        {company || "No company"} · {item.createdAt.slice(0, 10)}
+                      </small>
+                    </span>
+                    <span className="analysis-result">
+                      <strong>
+                        {item.score}
+                        <span>/100</span>
+                      </strong>
+                      <small>{item.classification}</small>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </FlowTip>
+        )}
       </section>
     );
   }
 
-  return <Report record={record} onChange={replaceAnalysis} notify={notify} />;
+  return <Report key={record.id} record={record} onChange={replaceAnalysis} notify={notify} />;
 }
 
 function Report({
@@ -54,6 +91,7 @@ function Report({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(record.emailError);
   const [score, setScore] = useState(0);
+  const [tab, setTab] = useState<SectionId>("overview");
   const company = record.job.company.trim();
   const heading = company ? `${record.job.title} at ${company}` : record.job.title;
   const mail = mailto(subject, body);
@@ -63,6 +101,27 @@ function Report({
     const frame = window.requestAnimationFrame(() => setScore(record.score));
     return () => window.cancelAnimationFrame(frame);
   }, [record.score]);
+
+  useEffect(() => {
+    const marker = 150;
+    const onScroll = () => {
+      let current: SectionId = "overview";
+      for (const [id] of SECTIONS) {
+        const node = document.getElementById(id);
+        if (node && node.getBoundingClientRect().top <= marker) current = id;
+      }
+      setTab(current);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const jumpTo = (id: SectionId) => {
+    dismissTip("analysis");
+    setTab(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => {
     setSubject(record.emailSubject);
@@ -109,37 +168,59 @@ function Report({
     record.apply.verdict === "worth_applying" ? "ok" : record.apply.verdict === "low_priority" ? "warn" : "info";
 
   return (
-    <section className="page">
-      <p className="eyebrow">Step 3</p>
-      <h1>Match analysis</h1>
-      <div className="score-hero">
-        <div className="ring" style={{ ["--p" as string]: score }} aria-label={`Match score ${record.score} out of 100`}>
-          <strong>{record.score}</strong>
-          <span>out of 100</span>
+    <section className="page analysis-page">
+      <header className="analysis-head">
+        <div className="analysis-title">
+          <div className="analysis-heading">
+            <Link className="back-link" to="/analysis">
+              <ArrowLeft size={15} /> Saved analyses
+            </Link>
+            <h1>Match analysis</h1>
+          </div>
         </div>
-        <div>
-          <p className="band">{record.classification}</p>
-          <h2>{heading}</h2>
-          <p className="fine">{record.createdAt.replace("T", " ").replace("Z", " UTC")}</p>
-          {posting ? (
-            <a className="text-link" href={posting} target="_blank" rel="noreferrer">
-              <ExternalLink size={14} /> Job posting
-            </a>
-          ) : null}
+      </header>
+      <div className="analysis-main">
+      <div className="card report-hero">
+        <div className="score-hero">
+          <div className="ring" style={{ ["--p" as string]: score }} aria-label={`Match score ${record.score} out of 100`}>
+            <strong>{record.score}</strong>
+            <span>out of 100</span>
+          </div>
+          <div>
+            <p className="band">{record.classification}</p>
+            <h2>{heading}</h2>
+            <p className="fine">{record.createdAt.replace("T", " ").replace("Z", " UTC")}</p>
+            {posting ? (
+              <a className="text-link" href={posting} target="_blank" rel="noreferrer">
+                <ExternalLink size={14} /> Job posting
+              </a>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className={`banner ${verdictClass}`}>
-        <strong>{VERDICT_LABELS[record.apply.verdict]}</strong>
-        <p>{record.apply.explanation}</p>
+      <FlowTip id="analysis" block label="These jump to each part of the report. The full analysis stays on the page.">
+      <div className="tabs jump-tabs" role="tablist" aria-label="Analysis sections">
+        {SECTIONS.map(([id, label]) => (
+          <button key={id} className={tab === id ? "active" : ""} type="button" role="tab" aria-selected={tab === id} onClick={() => jumpTo(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      </FlowTip>
+
+      <div id="overview" className="report-section">
+        <div className={`banner ${verdictClass}`}>
+          <strong>{VERDICT_LABELS[record.apply.verdict]}</strong>
+          <p>{record.apply.explanation}</p>
+        </div>
+        <article className="card">
+          <h2>Match summary</h2>
+          <p>{record.summary}</p>
+        </article>
       </div>
 
-      <article className="card">
-        <h2>Match summary</h2>
-        <p>{record.summary}</p>
-      </article>
-
-      <article className="card">
+      <article id="scores" className="card report-section">
         <h2>Category scores</h2>
         <ul className="bars">
           {record.categories.map((category) => {
@@ -188,6 +269,7 @@ function Report({
         })}
       </article>
 
+      <div id="skills" className="report-section">
       <article className="card">
         <h2>Matched skills</h2>
         {record.matchedSkills.length === 0 ? (
@@ -214,7 +296,9 @@ function Report({
           </div>
         ))}
       </article>
+      </div>
 
+      <div id="advice" className="report-section">
       <article className="card">
         <h2>Candidate strengths</h2>
         {record.strengths.length === 0 ? <p className="fine">No standout strengths were identified for this role.</p> : null}
@@ -246,9 +330,13 @@ function Report({
           );
         })}
       </article>
+      </div>
+      </div>
 
-      <article className="card stack">
-        <h2>Application email</h2>
+      <aside className="card draft-email" aria-label="Draft email">
+        <FlowTip id="email" label="Edit the draft here. Copy it, download the report, or open it in your mail app.">
+          <h2>Draft email</h2>
+        </FlowTip>
         {error ? (
           <div className="banner danger">
             <strong>Email draft unavailable</strong>
@@ -263,28 +351,29 @@ function Report({
             onBlur={() => persistEmail(subject, body)}
           />
         </label>
-        <label className="field">
+        <label className="field draft-body">
           <span>Email</span>
-          <textarea rows={12} value={body} onChange={(event) => setBody(event.target.value)} onBlur={() => persistEmail(subject, body)} />
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} onBlur={() => persistEmail(subject, body)} />
         </label>
-        <div className="row wrap">
+        <div className="draft-actions">
           <button className="btn ghost" type="button" onClick={() => void copyEmail()}>
             <Copy size={16} /> Copy
           </button>
           <button className="btn ghost" type="button" disabled={busy} onClick={() => void regenerate()}>
-            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Regenerate email
+            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Regenerate
           </button>
-          <button className="btn ghost" type="button" onClick={() => void download()}>
+          <button className="btn ghost wide" type="button" onClick={() => void download()}>
             <Download size={16} /> Download PDF
           </button>
           {mail ? (
-            <a className="btn primary" href={mail}>
+            <a className="btn primary wide" href={mail}>
               <Mail size={16} /> Open in email
             </a>
-          ) : null}
+          ) : (
+            <p className="fine wide">This email is too long to open in a mail app. Copy it instead.</p>
+          )}
         </div>
-        {mail ? null : <p className="fine">This email is too long to open in a mail app. Copy it instead.</p>}
-      </article>
+      </aside>
     </section>
   );
 }

@@ -1,9 +1,11 @@
 import { LoaderCircle, Sparkles, Upload } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { analyzeJob } from "../api";
+import { FlowTip } from "../components/Tooltip";
 import { useStore } from "../state";
+import { dismissTip } from "../tips";
 import type { JobPosting } from "../types";
 
 const emptyJob = (): JobPosting => ({ company: "", title: "", description: "", url: "" });
@@ -11,11 +13,22 @@ const emptyJob = (): JobPosting => ({ company: "", title: "", description: "", u
 export function JobPage() {
   const { snapshot, setDraft, rememberAnalysis } = useStore();
   const navigate = useNavigate();
-  const [job, setJob] = useState<JobPosting>(snapshot.draftJob ?? emptyJob());
+  const location = useLocation();
+  const fresh = Boolean((location.state as { fresh?: boolean } | null)?.fresh);
+  const [job, setJob] = useState<JobPosting>(fresh ? emptyJob() : snapshot.draftJob ?? emptyJob());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const profile = snapshot.profile;
+
+  const cleared = useRef(false);
+  useEffect(() => {
+    if (!fresh || cleared.current) return;
+    cleared.current = true;
+    setJob(emptyJob());
+    setDraft(null);
+    navigate("/job", { replace: true, state: null });
+  }, [fresh, navigate, setDraft]);
 
   const update = (next: JobPosting) => {
     setJob(next);
@@ -29,6 +42,7 @@ export function JobPage() {
       setError("Enter a job title and a job description of at least a few sentences.");
       return;
     }
+    dismissTip("job");
     setBusy(true);
     setError("");
     setStatus("Comparing the profile with the job description.");
@@ -36,7 +50,7 @@ export function JobPage() {
       const record = await analyzeJob(profile, job);
       setStatus(record.emailError ? "Match ready. The email draft needs another try." : "Analysis ready.");
       rememberAnalysis(record);
-      navigate("/analysis");
+      navigate(`/analysis?id=${encodeURIComponent(record.id)}`);
     } catch (caught) {
       setStatus("");
       setError(caught instanceof Error ? caught.message : "The match could not be completed.");
@@ -48,7 +62,6 @@ export function JobPage() {
   if (!profile) {
     return (
       <section className="page">
-        <p className="eyebrow">Step 2</p>
         <h1>Job description</h1>
         <div className="empty">
           <Upload size={18} />
@@ -66,7 +79,6 @@ export function JobPage() {
 
   return (
     <section className="page">
-      <p className="eyebrow">Step 2</p>
       <h1>Job description</h1>
       <p className="lede">
         Using the saved profile{profile.name ? ` for ${profile.name}` : ""}. You do not upload the CV again for each job.
@@ -108,10 +120,12 @@ export function JobPage() {
         </label>
         <p className="fine">Analyzing sends this job text and your saved profile to OpenAI. It can take a minute.</p>
         {status ? <p className="status-line">{busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} {status}</p> : null}
-        <button className="btn primary wide" type="button" disabled={busy} onClick={() => void analyze()}>
-          {busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-          Analyze job match
-        </button>
+        <FlowTip id="job" block above label="Paste the role, then analyze. The saved profile is sent with this job text.">
+          <button className="btn primary wide" type="button" disabled={busy} onClick={() => void analyze()}>
+            {busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+            Analyze job match
+          </button>
+        </FlowTip>
       </div>
     </section>
   );

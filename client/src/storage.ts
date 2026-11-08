@@ -1,7 +1,8 @@
 import type { AnalysisRecord, CandidateProfile, JobPosting } from "./types";
 
 const STORAGE_KEY = "jobfit-ai-v1";
-const MAX_HISTORY = 20;
+export const MAX_HISTORY = 5;
+const MIN_HISTORY = 3;
 const MAX_PAYLOAD = 4_000_000;
 
 export interface Snapshot {
@@ -68,6 +69,10 @@ export function loadSnapshot(): Snapshot {
 export function saveSnapshot(snapshot: Snapshot): void {
   let history = snapshot.history.slice(0, MAX_HISTORY);
   let payload = JSON.stringify({ ...snapshot, history });
+  while (payload.length > MAX_PAYLOAD && history.length > MIN_HISTORY) {
+    history = history.slice(0, -1);
+    payload = JSON.stringify({ ...snapshot, history });
+  }
   while (payload.length > MAX_PAYLOAD && history.length > 0) {
     history = history.slice(0, -1);
     payload = JSON.stringify({ ...snapshot, history });
