@@ -139,6 +139,12 @@ OPENAI_ALLOW_BUILTIN=false
 
 `OPENAI_ALLOW_BUILTIN=true` offers Built-in and Own. `false`, `0`, or `no` requires each user to save their own key and model. Changing this value needs a restart of the API.
 
+## Deploy on Vercel
+
+A log that runs `tsc -p tsconfig.json --noEmit && vite build` means the Vercel root directory is `client`. That folder has no API, so the imported environment variables are not read, and the site files are not where Vercel expects `dist`.
+
+Clear Root Directory so it is the repository root. Set the framework preset to Other, the build command to `npm run build`, and the output directory to `client/dist`. Deploy again after saving those settings.
+
 ## Security
 
 The CV, profile, job drafts, and match reports stay in this browser. JobFit keeps no account and no application database, so that information remains on your device and out of any public or shared store. Clearing this browser’s site data removes it.
