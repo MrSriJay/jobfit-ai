@@ -270,6 +270,10 @@ p { margin: 0; }
   font-weight: 800;
 }
 .entry-body { display: grid; gap: 10px; min-width: 0; }
+.entry-list { display: grid; gap: 8px; }
+.entry-list > span { font-size: 0.86rem; font-weight: 700; }
+.entry-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.entry-line input { width: 100%; }
 .entry-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; }
 .entry-grid.certs { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(120px, 0.6fr); }
 .entry .field input,

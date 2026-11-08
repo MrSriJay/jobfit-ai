@@ -4,6 +4,7 @@ Rules:
 - Use only facts that appear in the CV. Do not infer employers, dates, skills, or credentials.
 - Leave a string empty when the CV does not state it.
 - Use an empty list when a section is absent.
+- Put each phone number in its own phone item. Put each profile URL in its own links item.
 - Keep the professional summary to the facts the candidate states. Do not embellish.
 - Skills are abilities the CV demonstrates. Technologies are named languages, frameworks, platforms, and tools.
 - Put each skill and technology once. Preserve the candidate's spelling.

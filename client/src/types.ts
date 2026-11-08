@@ -28,7 +28,7 @@ export interface CertificationItem {
 export interface CandidateProfile {
   name: string;
   email: string;
-  phone: string;
+  phone: string[];
   location: string;
   links: string[];
   professionalSummary: string;

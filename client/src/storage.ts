@@ -24,6 +24,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function textList(value: unknown, separator: RegExp): string[] {
+  const parts = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return parts.flatMap((item) => (typeof item === "string" ? item.split(separator) : [])).map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizeProfile(value: Record<string, unknown>): CandidateProfile {
+  const profile = value as unknown as CandidateProfile;
+  return {
+    ...profile,
+    phone: textList(value.phone, /\s*(?:;|\||\n|\/)\s*/),
+    links: textList(value.links, /\n+/),
+  };
+}
+
 export function loadSnapshot(): Snapshot {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -37,9 +51,12 @@ export function loadSnapshot(): Snapshot {
       currentAnalysisId = typedHistory[0]?.id ?? "";
     }
     return {
-      profile: isRecord(data.profile) ? (data.profile as unknown as CandidateProfile) : null,
+      profile: isRecord(data.profile) ? normalizeProfile(data.profile) : null,
       cvFilename: typeof data.cvFilename === "string" ? data.cvFilename : "",
-      history: typedHistory,
+      history: typedHistory.map((item) => ({
+        ...item,
+        profile: isRecord(item.profile) ? normalizeProfile(item.profile) : item.profile,
+      })),
       currentAnalysisId,
       draftJob: isRecord(data.draftJob) ? (data.draftJob as unknown as JobPosting) : null,
     };

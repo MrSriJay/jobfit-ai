@@ -32,7 +32,7 @@ export const certificationItemSchema = z.object({
 export const candidateProfileSchema = z.object({
   name: text("Candidate name. Empty if it is not in the CV."),
   email: text("Email address. Empty if it is not in the CV."),
-  phone: text("Phone number. Empty if it is not in the CV."),
+  phone: z.array(z.string()).describe("Each phone number from the CV, as its own item. Empty if none."),
   location: text("City, region, or country. Empty if unknown."),
   links: z.array(z.string()).describe("Profile URLs such as LinkedIn or a portfolio."),
   professionalSummary: text("A short summary using only facts stated in the CV."),

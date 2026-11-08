@@ -21,8 +21,9 @@ function tokens(value: string): string[] {
   return unique(value.split(/[,|\n]+/));
 }
 
-function lines(value: string): string[] {
-  return unique(value.split(/\n+/));
+function textList(value: string | string[], separator: RegExp): string[] {
+  const parts = Array.isArray(value) ? value : [value];
+  return parts.flatMap((item) => item.split(separator)).map((item) => item.trim()).filter(Boolean);
 }
 
 const tabs = [
@@ -45,7 +46,11 @@ export function ProfileForm({
   onSave: (profile: CandidateProfile) => void;
   next?: ReactNode;
 }) {
-  const [draft, setDraft] = useState(profile);
+  const [draft, setDraft] = useState(() => ({
+    ...profile,
+    phone: textList(profile.phone, /\s*(?:;|\||\n|\/)\s*/),
+    links: textList(profile.links, /\n+/),
+  }));
   const [tab, setTab] = useState<ProfileTab>("about");
 
   const save = () => {
@@ -53,9 +58,9 @@ export function ProfileForm({
       ...draft,
       name: draft.name.trim(),
       email: draft.email.trim(),
-      phone: draft.phone.trim(),
+      phone: unique(draft.phone),
       location: draft.location.trim(),
-      links: lines(draft.links.join("\n")),
+      links: unique(draft.links, false),
       professionalSummary: draft.professionalSummary.trim(),
       skills: tokens(draft.skills.join("\n")),
       technologies: tokens(draft.technologies.join("\n")),
@@ -111,10 +116,22 @@ export function ProfileForm({
           <div className="grid-2">
             <Field label="Name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
             <Field label="Email" value={draft.email} onChange={(email) => setDraft({ ...draft, email })} />
-            <Field label="Phone" value={draft.phone} onChange={(phone) => setDraft({ ...draft, phone })} />
-            <Field label="Location" value={draft.location} onChange={(location) => setDraft({ ...draft, location })} />
           </div>
-          <Area label="Links" hint="One URL per line." value={draft.links.join("\n")} onChange={(value) => setDraft({ ...draft, links: value.split("\n") })} />
+          <Field label="Location" value={draft.location} onChange={(location) => setDraft({ ...draft, location })} />
+          <EntryList
+            label="Phone"
+            addLabel="Add phone"
+            placeholder="+94 ..."
+            values={draft.phone}
+            onChange={(phone) => setDraft({ ...draft, phone })}
+          />
+          <EntryList
+            label="Links"
+            addLabel="Add link"
+            placeholder="https://"
+            values={draft.links}
+            onChange={(links) => setDraft({ ...draft, links })}
+          />
           <Area label="Professional summary" value={draft.professionalSummary} onChange={(professionalSummary) => setDraft({ ...draft, professionalSummary })} />
         </div>
       ) : null}
@@ -205,6 +222,39 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     <button className="btn ghost" type="button" onClick={onClick}>
       <Plus size={16} /> {label}
     </button>
+  );
+}
+
+function EntryList({
+  label,
+  addLabel,
+  placeholder,
+  values,
+  onChange,
+}: {
+  label: string;
+  addLabel: string;
+  placeholder: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <div className="entry-list">
+      <span>{label}</span>
+      {values.length === 0 ? <p className="fine">None yet.</p> : null}
+      {values.map((value, index) => (
+        <div className="entry-line" key={index}>
+          <input
+            value={value}
+            placeholder={placeholder}
+            aria-label={`${label} ${index + 1}`}
+            onChange={(event) => onChange(values.map((item, itemIndex) => (itemIndex === index ? event.target.value : item)))}
+          />
+          <Remove onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))} />
+        </div>
+      ))}
+      <AddButton label={addLabel} onClick={() => onChange([...values, ""])} />
+    </div>
   );
 }
 
