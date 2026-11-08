@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
@@ -23,17 +24,28 @@ import {
 const promptCache = new Map<string, string>();
 const profileCache = new Map<string, CandidateProfile>();
 
+const promptFiles: Record<string, URL> = {
+  "cv_extraction.txt": new URL("../../prompts/cv_extraction.txt", import.meta.url),
+  "job_matching.txt": new URL("../../prompts/job_matching.txt", import.meta.url),
+  "email_generation.txt": new URL("../../prompts/email_generation.txt", import.meta.url),
+};
+
 function loadPrompt(filename: string): string {
   const cached = promptCache.get(filename);
   if (cached) return cached;
-  const candidates = [path.join(process.cwd(), "prompts", filename), path.join(ROOT, "prompts", filename)];
+  const bundled = promptFiles[filename];
+  const candidates = [
+    bundled ? fileURLToPath(bundled) : "",
+    path.join(process.cwd(), "prompts", filename),
+    path.join(ROOT, "prompts", filename),
+  ].filter(Boolean);
   for (const candidate of candidates) {
     try {
       const text = readFileSync(candidate, "utf8").trim();
       promptCache.set(filename, text);
       return text;
     } catch {
-      // Try the next location. The local project root and the Vercel bundle keep the prompts in different places.
+      // The local project and the Vercel bundle keep the prompt files in different places.
     }
   }
   throw new AppError("The analysis instructions are unavailable.", 500);

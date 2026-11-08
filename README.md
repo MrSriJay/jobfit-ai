@@ -141,9 +141,7 @@ OPENAI_ALLOW_BUILTIN=false
 
 ## Deploy on Vercel
 
-A log that runs `tsc -p tsconfig.json --noEmit && vite build` means the Vercel root directory is `client`. That folder has no API, so the imported environment variables are not read, and the site files are not where Vercel expects `dist`.
-
-Clear Root Directory so it is the repository root. Set the framework preset to Other, the build command to `npm run build`, and the output directory to `client/dist`. Deploy again after saving those settings.
+A log that runs `tsc -p tsconfig.json --noEmit && vite build` means the Vercel root directory is `client`. Leave that as it is. `client/vercel.json` installs the whole project, builds the website into `dist`, and serves the API from the same site. Deploy the commit that contains `client/vercel.json`. The imported variables are read by that API, so they apply on the new deployment.
 
 ## Security
 
