@@ -4,6 +4,12 @@ JobFit AI compares one CV with a job description. It shows a match score, the sk
 
 There are no accounts and no application database. The profile, job draft, and recent reports stay in this browser.
 
+## Motivation
+
+Job opportunities show up often on platforms such as LinkedIn. Working out whether a role matches your skills and experience, reading the requirements, and writing a tailored application email is often slow and difficult.
+
+JobFit is built to simplify that process. It compares a CV with a job description, shows how suitable the opportunity is, highlights skill gaps, and helps prepare a professional, personalised application email. The aim is to make the job search easier, faster, and more efficient.
+
 ![Welcome](docs/screenshots/welcome.png)
 
 ## Screenshots
@@ -138,10 +144,12 @@ npm test
 npm run typecheck
 ```
 
-## Privacy
+## Security
 
-CV text is sent to OpenAI only when a profile is extracted. The saved profile and a job description are sent only when you analyze a job or regenerate an email. A key check sends the active key and model so the footer can show whether they respond.
+The CV, profile, job drafts, and match reports stay in this browser. JobFit keeps no account and no application database, so that information remains on your device and out of any public or shared store. Clearing this browser’s site data removes it.
 
-Your own API key is saved only in this browser. It is not placed in a public or shared store. The developer key stays on the server and is not returned to the browser.
+A CV is sent to OpenAI only when you extract a profile. A saved profile and a job description are sent only when you analyze a match or regenerate an email. A key check sends the active key and model so the footer can show whether they respond. Those requests are made with storage turned off.
 
-Profiles and reports are stored in this browser under `jobfit-ai-v1`. The server keeps a short in-memory cache of recent extractions so the same CV text is not billed twice during one run.
+The built-in API key remains on the server and is not returned to the browser. A key you enter in Settings is stored only on this device, in this browser. It is not placed in a public or shared store.
+
+The server keeps a short in-memory cache of recent extractions so the same CV text is not billed twice during one run. That cache is not a database and is dropped when the API process stops.

@@ -16,26 +16,39 @@ export function WelcomePage() {
 
   return (
     <section className="welcome">
-      <Logo size={84} />
-      <p className="eyebrow wordmark"><span className="mark-job">Job</span><span className="mark-fit">Fit</span></p>
-      <h1>{m.welcome.title}</h1>
-      <p className="lede welcome-copy">{m.welcome.lede}</p>
-      <ol className="welcome-steps">
-        {m.welcome.steps.map((step, index) => (
-          <li key={step.title}>
-            <span>{index + 1}</span>
-            <div>
-              <strong>{step.title}</strong>
-              <p>{step.text}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <FlowTip id="start" label={m.welcome.tip}>
-        <Link className="btn primary welcome-start" to="/upload" onClick={() => dismissTip("start")}>
-          {m.welcome.start} <ArrowRight size={18} />
-        </Link>
-      </FlowTip>
+      <div className="welcome-bg" aria-hidden="true">
+        <span className="glow glow-yellow" />
+        <span className="glow glow-blue" />
+        <span className="glow glow-yellow-soft" />
+        <span className="float-doc" />
+        <span className="float-ring" />
+        <span className="float-tile" />
+        <span className="float-dot dot-a" />
+        <span className="float-dot dot-b" />
+        <span className="float-dot dot-c" />
+      </div>
+      <div className="welcome-inner">
+        <Logo size={84} />
+        <p className="eyebrow wordmark"><span className="mark-job">Job</span><span className="mark-fit">Fit</span></p>
+        <h1>{m.welcome.title}</h1>
+        <p className="lede welcome-copy">{m.welcome.lede}</p>
+        <ol className="welcome-steps">
+          {m.welcome.steps.map((step, index) => (
+            <li key={step.title}>
+              <span>{index + 1}</span>
+              <div>
+                <strong>{step.title}</strong>
+                <p>{step.text}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <FlowTip id="start" label={m.welcome.tip}>
+          <Link className="btn primary welcome-start" to="/upload" onClick={() => dismissTip("start")}>
+            {m.welcome.start} <ArrowRight size={18} />
+          </Link>
+        </FlowTip>
+      </div>
     </section>
   );
 }
