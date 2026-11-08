@@ -139,6 +139,25 @@ OPENAI_ALLOW_BUILTIN=false
 
 `OPENAI_ALLOW_BUILTIN=true` offers Built-in and Own. `false`, `0`, or `no` requires each user to save their own key and model. Changing this value needs a restart of the API.
 
+## Deploy on Vercel
+
+Importing `.env` into the Vercel project does not, by itself, configure the website. The website does not read `OPENAI_API_KEY`. The API does, and an earlier Vite-only project never starts that API. The `.env` file is also not uploaded with the code.
+
+Use the repository root as the Vercel root directory, not `client`. The framework preset is Other. This repository already sets the build command to `npm run build` and the output directory to `client/dist`.
+
+In Project Settings, Environment Variables, add these names for Production and Preview:
+
+```
+OPENAI_API_KEY
+OPENAI_MODEL
+OPENAI_REASONING_EFFORT
+OPENAI_ALLOW_BUILTIN
+```
+
+Keep the names exactly like that. A `VITE_` prefix would place the key in the public website. After saving the variables, deploy again. Vercel applies environment variables to new deployments only.
+
+The footer then reads `/api/status` from the same site. **Key configured** means the imported key is present. **Not connected** means this deployment cannot reach the API or the key.
+
 ```powershell
 npm test
 npm run typecheck

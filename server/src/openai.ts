@@ -26,9 +26,17 @@ const profileCache = new Map<string, CandidateProfile>();
 function loadPrompt(filename: string): string {
   const cached = promptCache.get(filename);
   if (cached) return cached;
-  const text = readFileSync(path.join(ROOT, "prompts", filename), "utf8").trim();
-  promptCache.set(filename, text);
-  return text;
+  const candidates = [path.join(process.cwd(), "prompts", filename), path.join(ROOT, "prompts", filename)];
+  for (const candidate of candidates) {
+    try {
+      const text = readFileSync(candidate, "utf8").trim();
+      promptCache.set(filename, text);
+      return text;
+    } catch {
+      // Try the next location. The local project root and the Vercel bundle keep the prompts in different places.
+    }
+  }
+  throw new AppError("The analysis instructions are unavailable.", 500);
 }
 
 export interface CallOptions {
@@ -119,7 +127,7 @@ async function parseStructured<T>(
   options?: CallOptions,
 ): Promise<T> {
   const chosen = credentials(options);
-  const client = new OpenAI({ apiKey: chosen.apiKey, timeout: 180_000 });
+  const client = new OpenAI({ apiKey: chosen.apiKey, timeout: process.env.VERCEL === "1" ? 50_000 : 180_000 });
   try {
     const response = await client.responses.parse({
       model: chosen.model,

@@ -119,6 +119,10 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ error: publicErrorText(error) });
 });
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`JobFit API listening on http://127.0.0.1:${PORT}`);
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, "127.0.0.1", () => {
+    console.log(`JobFit API listening on http://127.0.0.1:${PORT}`);
+  });
+}
+
+export default app;
