@@ -1,0 +1,6 @@
+.env
+node_modules/
+dist/
+client/dist/
+.idea/
+.vscode/
