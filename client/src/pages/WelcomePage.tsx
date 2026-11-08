@@ -4,16 +4,12 @@ import { Link, Navigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { FlowTip } from "../components/Tooltip";
 import { dismissTip } from "../tips";
+import { usePreferences } from "../preferences";
 import { useStore } from "../state";
-
-const steps = [
-  { n: "1", title: "Upload a CV", text: "PDF or DOCX, read once and saved in this browser." },
-  { n: "2", title: "Paste a job", text: "The same profile is compared with each new role." },
-  { n: "3", title: "Read the fit", text: "A scored report, the gaps, and a draft email." },
-];
 
 export function WelcomePage() {
   const { snapshot } = useStore();
+  const { m } = usePreferences();
   if (snapshot.profile) {
     return <Navigate to="/upload" replace />;
   }
@@ -22,14 +18,12 @@ export function WelcomePage() {
     <section className="welcome">
       <Logo size={84} />
       <p className="eyebrow wordmark"><span className="mark-job">Job</span><span className="mark-fit">Fit</span></p>
-      <h1>See how well a CV fits the role.</h1>
-      <p className="lede welcome-copy">
-        JobFit reads one resume, compares it with a job description, and explains the match. You get a score, the missing evidence, and an application email you can edit.
-      </p>
+      <h1>{m.welcome.title}</h1>
+      <p className="lede welcome-copy">{m.welcome.lede}</p>
       <ol className="welcome-steps">
-        {steps.map((step) => (
-          <li key={step.n}>
-            <span>{step.n}</span>
+        {m.welcome.steps.map((step, index) => (
+          <li key={step.title}>
+            <span>{index + 1}</span>
             <div>
               <strong>{step.title}</strong>
               <p>{step.text}</p>
@@ -37,9 +31,9 @@ export function WelcomePage() {
           </li>
         ))}
       </ol>
-      <FlowTip id="start" label="Start with a CV. You upload it once, then compare it with each job.">
+      <FlowTip id="start" label={m.welcome.tip}>
         <Link className="btn primary welcome-start" to="/upload" onClick={() => dismissTip("start")}>
-          Start here <ArrowRight size={18} />
+          {m.welcome.start} <ArrowRight size={18} />
         </Link>
       </FlowTip>
     </section>

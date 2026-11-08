@@ -2,11 +2,14 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { apiStatus } from "./api";
 import { emptySnapshot, loadSnapshot, MAX_HISTORY, saveSnapshot, type Snapshot } from "./storage";
+import { clearOwnKey } from "./preferences";
 import { resetTips } from "./tips";
 import type { AnalysisRecord, CandidateProfile, JobPosting } from "./types";
 
 interface Store {
   configured: "loading" | "ready" | "missing" | "offline";
+  allowBuiltin: boolean;
+  builtinModel: string;
   snapshot: Snapshot;
   profileNonce: number;
   notice: string;
@@ -15,8 +18,8 @@ interface Store {
   rememberAnalysis: (record: AnalysisRecord) => void;
   replaceAnalysis: (record: AnalysisRecord) => void;
   selectAnalysis: (id: string) => void;
-  clearAll: () => void;
-  clearCv: () => void;
+  clearAll: (message?: string) => void;
+  clearCv: (message?: string) => void;
   notify: (message: string) => void;
 }
 
@@ -26,6 +29,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<Snapshot>(() => loadSnapshot());
   const [profileNonce, setProfileNonce] = useState(0);
   const [configured, setConfigured] = useState<"loading" | "ready" | "missing" | "offline">("loading");
+  const [allowBuiltin, setAllowBuiltin] = useState(true);
+  const [builtinModel, setBuiltinModel] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -38,7 +43,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         try {
           const status = await apiStatus();
-          if (!cancelled) setConfigured(status.configured ? "ready" : "missing");
+          if (!cancelled) {
+            setConfigured(status.configured ? "ready" : "missing");
+            setAllowBuiltin(status.allowBuiltin);
+            setBuiltinModel(status.model);
+          }
           return;
         } catch {
           await new Promise((resolve) => window.setTimeout(resolve, 400));
@@ -61,6 +70,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store = useMemo<Store>(
     () => ({
       configured,
+      allowBuiltin,
+      builtinModel,
       snapshot,
       profileNonce,
       notice,
@@ -86,20 +97,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           currentAnalysisId: record.id,
         })),
       selectAnalysis: (id) => setSnapshot((current) => ({ ...current, currentAnalysisId: id })),
-      clearAll: () => {
+      clearAll: (message = "Local data cleared") => {
         resetTips();
+        clearOwnKey();
+        window.dispatchEvent(new Event("jobfit-key-warn"));
         setSnapshot(emptySnapshot());
         setProfileNonce((value) => value + 1);
-        setNotice("Local data cleared");
+        setNotice(message);
       },
-      clearCv: () => {
+      clearCv: (message = "CV and profile removed") => {
         setSnapshot((current) => ({ ...current, profile: null, cvFilename: "" }));
         setProfileNonce((value) => value + 1);
-        setNotice("CV and profile removed");
+        setNotice(message);
       },
       notify: setNotice,
     }),
-    [configured, snapshot, profileNonce, notice],
+    [configured, allowBuiltin, builtinModel, snapshot, profileNonce, notice],
   );
 
   return (

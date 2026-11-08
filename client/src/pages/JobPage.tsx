@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { analyzeJob } from "../api";
 import { FlowTip } from "../components/Tooltip";
+import { ownCredentialsReady, usePreferences } from "../preferences";
 import { useStore } from "../state";
 import { dismissTip } from "../tips";
 import type { JobPosting } from "../types";
@@ -11,7 +12,8 @@ import type { JobPosting } from "../types";
 const emptyJob = (): JobPosting => ({ company: "", title: "", description: "", url: "" });
 
 export function JobPage() {
-  const { snapshot, setDraft, rememberAnalysis } = useStore();
+  const { snapshot, setDraft, rememberAnalysis, configured, allowBuiltin } = useStore();
+  const { prefs, m, fill } = usePreferences();
   const navigate = useNavigate();
   const location = useLocation();
   const fresh = Boolean((location.state as { fresh?: boolean } | null)?.fresh);
@@ -39,21 +41,25 @@ export function JobPage() {
   const analyze = async () => {
     if (!profile) return;
     if (!job.title.trim() || job.description.trim().length < 40) {
-      setError("Enter a job title and a job description of at least a few sentences.");
+      setError(m.job.tooShort);
+      return;
+    }
+    if ((!allowBuiltin || prefs.useOwnKey) && !ownCredentialsReady({ ...prefs, useOwnKey: true })) {
+      setError(m.upload.ownKeyBody);
       return;
     }
     dismissTip("job");
     setBusy(true);
     setError("");
-    setStatus("Comparing the profile with the job description.");
+    setStatus(m.job.comparing);
     try {
       const record = await analyzeJob(profile, job);
-      setStatus(record.emailError ? "Match ready. The email draft needs another try." : "Analysis ready.");
+      setStatus(record.emailError ? m.job.emailRetry : m.job.ready);
       rememberAnalysis(record);
       navigate(`/analysis?id=${encodeURIComponent(record.id)}`);
     } catch (caught) {
       setStatus("");
-      setError(caught instanceof Error ? caught.message : "The match could not be completed.");
+      setError(caught instanceof Error ? caught.message : m.job.failed);
     } finally {
       setBusy(false);
     }
@@ -62,16 +68,16 @@ export function JobPage() {
   if (!profile) {
     return (
       <section className="page">
-        <h1>Job description</h1>
+        <h1>{m.job.title}</h1>
         <div className="empty">
           <Upload size={18} />
           <div>
-            <strong>CV profile needed</strong>
-            <p>Upload a CV and save the extracted profile before analyzing a job.</p>
+            <strong>{m.job.emptyTitle}</strong>
+            <p>{m.job.emptyText}</p>
           </div>
         </div>
         <Link className="btn primary" to="/upload">
-          <Upload size={16} /> Go to CV upload
+          <Upload size={16} /> {m.job.goUpload}
         </Link>
       </section>
     );
@@ -79,17 +85,21 @@ export function JobPage() {
 
   return (
     <section className="page">
-      <h1>Job description</h1>
-      <p className="lede">
-        Using the saved profile{profile.name ? ` for ${profile.name}` : ""}. You do not upload the CV again for each job.
-      </p>
+      <h1>{m.job.title}</h1>
+      <p className="lede">{profile.name ? fill(m.job.usingNamed, { name: profile.name }) : m.job.using}</p>
       <Link className="text-link" to="/upload">
-        Edit profile
+        {m.job.edit}
       </Link>
 
+      {allowBuiltin && configured === "missing" && !prefs.useOwnKey ? (
+        <div className="banner danger">
+          <strong>{m.upload.keyTitle}</strong>
+          <p>{m.upload.keyBody}</p>
+        </div>
+      ) : null}
       {error ? (
         <div className="banner danger">
-          <strong>Job details needed</strong>
+          <strong>{m.job.neededTitle}</strong>
           <p>{error}</p>
         </div>
       ) : null}
@@ -97,33 +107,33 @@ export function JobPage() {
       <div className="card stack">
         <div className="grid-2">
           <label className="field">
-            <span>Company</span>
-            <input value={job.company} placeholder="Optional" onChange={(event) => update({ ...job, company: event.target.value })} />
+            <span>{m.job.company}</span>
+            <input value={job.company} placeholder={m.job.optional} onChange={(event) => update({ ...job, company: event.target.value })} />
           </label>
           <label className="field">
-            <span>Job title</span>
+            <span>{m.job.jobTitle}</span>
             <input value={job.title} onChange={(event) => update({ ...job, title: event.target.value })} />
           </label>
         </div>
         <label className="field">
-          <span>Job URL</span>
-          <input value={job.url} placeholder="Optional" onChange={(event) => update({ ...job, url: event.target.value })} />
+          <span>{m.job.url}</span>
+          <input value={job.url} placeholder={m.job.optional} onChange={(event) => update({ ...job, url: event.target.value })} />
         </label>
         <label className="field">
-          <span>Job description</span>
+          <span>{m.job.description}</span>
           <textarea
             rows={12}
             value={job.description}
-            placeholder="Paste the responsibilities, requirements, and nice-to-haves."
+            placeholder={m.job.placeholder}
             onChange={(event) => update({ ...job, description: event.target.value })}
           />
         </label>
-        <p className="fine">Analyzing sends this job text and your saved profile to OpenAI. It can take a minute.</p>
+        <p className="fine">{m.job.fine}</p>
         {status ? <p className="status-line">{busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} {status}</p> : null}
-        <FlowTip id="job" block above label="Paste the role, then analyze. The saved profile is sent with this job text.">
+        <FlowTip id="job" block above label={m.job.tip}>
           <button className="btn primary wide" type="button" disabled={busy} onClick={() => void analyze()}>
             {busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-            Analyze job match
+            {m.job.analyze}
           </button>
         </FlowTip>
       </div>

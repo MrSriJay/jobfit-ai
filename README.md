@@ -1,21 +1,100 @@
 # JobFit AI
 
-JobFit AI compares a CV with a job description and explains the match. Upload a resume once, then check different jobs without uploading it again. The app drafts an application email and can export the report as a PDF.
+JobFit AI compares one CV with a job description. It shows a match score, the skill gaps, and a draft application email. Upload a resume once, or type the profile yourself, then check other roles without uploading the CV again.
 
-There are no accounts and no database. The CV profile, job drafts, and past reports stay in this browser.
+There are no accounts and no application database. The profile, job draft, and recent reports stay in this browser.
 
-The interface is a React and TypeScript app. A small Node server reads the CV file and calls OpenAI. The API key stays in `.env` and is never sent to the browser.
+![Welcome](docs/screenshots/welcome.png)
+
+## Screenshots
+
+The job and report screens use a sample profile so the layout is visible without a real CV.
+
+| Upload a CV | Paste a job |
+| --- | --- |
+| ![Upload CV screen](docs/screenshots/upload.png) | ![Job description screen](docs/screenshots/job.png) |
+
+![Match report](docs/screenshots/report.png)
+
+![Settings for language, API key, and model](docs/screenshots/settings.png)
 
 ## What you can do
 
-1. Drop a PDF or DOCX CV onto the page and review the extracted profile.
-2. Paste a job title and description.
-3. Read a 0–100 match score, matched skills, gaps, and recommendations.
-4. Edit, copy, or open a draft application email.
-5. Download a PDF report.
-6. Open Settings in the top bar to revisit a saved analysis or clear local data.
+1. Drop a PDF or DOCX CV onto the page, or add the profile manually.
+2. Review the extracted profile and keep it for later jobs.
+3. Paste a job title and description.
+4. Read a 0–100 match score, matched skills, gaps, and recommendations.
+5. Edit, copy, regenerate, or open a draft application email.
+6. Download a PDF report.
+7. Choose English, Sinhala, or Tamil. English is the default.
+8. Use the developer key, or save your own OpenAI API key and model in Settings.
 
-The score is a weighted sum of five category scores. The model scores each category. The server calculates the total.
+Saved analyses stay in the settings menu and on the Analysis page. Clearing local data removes the profile, drafts, reports, and your own API key from this browser. The language choice stays.
+
+## Architecture
+
+The browser never receives the developer API key. A CV file is read on the server. OpenAI is called only for extraction, analysis, email regeneration, and the key check. Those requests are sent with `store` set to false.
+
+```mermaid
+flowchart LR
+  subgraph browser [Browser]
+    UI["React app"]
+    Store["local storage"]
+    UI --- Store
+  end
+  subgraph server [This machine]
+    API["Express API"]
+    Docs["PDF and DOCX reader"]
+    Score["Score calculator"]
+    API --- Docs
+    API --- Score
+  end
+  Model["OpenAI"]
+  UI -->|"/api"| API
+  API -->|"profile, match, email"| Model
+```
+
+```text
+client/     React, TypeScript, Vite
+server/     Express, TypeScript
+prompts/    Instructions for extraction, matching, and the email
+```
+
+| Piece | Role |
+| --- | --- |
+| Welcome, Upload, Job, Analysis, Settings | Pages in `client/src/pages` |
+| `jobfit-ai-v1` | Profile, CV filename, job draft, and up to five reports |
+| `jobfit-settings-v1` | Language, and your own API key and model when you choose Own |
+| `jobfit-theme-v1` | Dark or light theme |
+| `POST /api/parse` | Reads a PDF or DOCX into text. Does not call OpenAI |
+| `POST /api/extract` | Turns CV text into a profile |
+| `POST /api/analyze` | Compares the profile with a job, then drafts an email |
+| `POST /api/email` | Regenerates the email for a saved analysis |
+| `GET /api/status` | Reports whether the developer key is present, the model name, and whether Built-in is offered |
+| `POST /api/key-check` | Asks OpenAI whether the active key and model respond |
+| `server/src/score.ts` | Turns the five category scores into the 0–100 result |
+| `prompts/` | Text instructions sent with each OpenAI request |
+
+Vite serves the interface at http://127.0.0.1:5173 and proxies `/api` to the API at http://127.0.0.1:8787.
+
+### Which key is used
+
+Settings offers two sources when `OPENAI_ALLOW_BUILTIN` is true:
+
+- **Built-in** uses the developer key and model from `.env`.
+- **Own** uses the API key and model saved in this browser.
+
+Set `OPENAI_ALLOW_BUILTIN` to `false` when everyone must use their own key and model. The app then asks for that key on launch and explains that it is stored only on this device, in this browser.
+
+The footer shows two tags: whether a key is configured, and whether that key and model respond.
+
+### Languages
+
+English, Sinhala, and Tamil are available in Settings. The interface, the match report, and the draft email follow that choice. Facts taken from the CV stay as written. The downloaded PDF uses a Latin font, so Sinhala and Tamil may not appear in that file.
+
+## Scoring
+
+The model scores five categories. The server calculates the total. It does not ask the model for the final percentage.
 
 | Criteria | Weight |
 | --- | --- |
@@ -27,11 +106,11 @@ The score is a weighted sum of five category scores. The model scores each categ
 
 | Score | Classification |
 | --- | --- |
-| 85–100% | Excellent match |
-| 70–84% | Strong match |
-| 50–69% | Partial match |
-| 30–49% | Weak match |
-| 0–29% | Poor match |
+| 85–100 | Excellent match |
+| 70–84 | Strong match |
+| 50–69 | Partial match |
+| 30–49 | Weak match |
+| 0–29 | Poor match |
 
 ## Setup
 
@@ -43,14 +122,16 @@ npm install
 npm run dev
 ```
 
-Put `OPENAI_API_KEY` in `.env`. The default model is `gpt-5.6-sol`. Optional settings:
+Put `OPENAI_API_KEY` in `.env` when Built-in should be available.
 
 ```
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6-sol
 OPENAI_REASONING_EFFORT=low
+OPENAI_ALLOW_BUILTIN=false
 ```
 
-The app opens at http://127.0.0.1:5173. The API listens on http://127.0.0.1:8787.
+`OPENAI_ALLOW_BUILTIN=true` offers Built-in and Own. `false`, `0`, or `no` requires each user to save their own key and model. Changing this value needs a restart of the API.
 
 ```powershell
 npm test
@@ -59,4 +140,8 @@ npm run typecheck
 
 ## Privacy
 
-CV text and job descriptions are sent to OpenAI only when you extract a profile, analyze a job, or regenerate an email. Requests are made with `store` set to false. Profiles and reports are written to this browser's local storage under `jobfit-ai-v1`. The server keeps a short in-memory cache of recent extractions so the same CV text is not billed twice in one run.
+CV text is sent to OpenAI only when a profile is extracted. The saved profile and a job description are sent only when you analyze a job or regenerate an email. A key check sends the active key and model so the footer can show whether they respond.
+
+Your own API key is saved only in this browser. It is not placed in a public or shared store. The developer key stays on the server and is not returned to the browser.
+
+Profiles and reports are stored in this browser under `jobfit-ai-v1`. The server keeps a short in-memory cache of recent extractions so the same CV text is not billed twice during one run.

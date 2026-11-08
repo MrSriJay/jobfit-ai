@@ -1,10 +1,10 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 
-import { PORT } from "./config.js";
+import { ALLOW_BUILTIN, MODEL, PORT } from "./config.js";
 import { parseDocument } from "./documents.js";
 import { AppError, publicErrorText } from "./errors.js";
-import { apiKeyConfigured, createAnalysis, extractProfile, regenerateEmail } from "./openai.js";
+import { apiKeyConfigured, checkApiKey, createAnalysis, extractProfile, readCallOptions, regenerateEmail } from "./openai.js";
 import { candidateProfileSchema, jobPostingSchema, matchResultSchema } from "./schemas.js";
 
 const app = express();
@@ -16,7 +16,15 @@ const upload = multer({
 });
 
 app.get("/api/status", (_req, res) => {
-  res.json({ configured: apiKeyConfigured() });
+  res.json({ configured: apiKeyConfigured(), model: MODEL, allowBuiltin: ALLOW_BUILTIN });
+});
+
+app.post("/api/key-check", async (req, res, next) => {
+  try {
+    res.json(await checkApiKey(readCallOptions(req.body)));
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/parse", upload.single("cv"), async (req, res, next) => {
@@ -38,7 +46,7 @@ app.post("/api/extract", async (req, res, next) => {
   try {
     const text = typeof req.body?.text === "string" ? req.body.text : "";
     if (text.trim().length < 40) throw new AppError("The CV does not contain enough text to extract a profile.");
-    const result = await extractProfile(text);
+    const result = await extractProfile(text, readCallOptions(req.body));
     res.json(result);
   } catch (error) {
     next(error);
@@ -61,7 +69,7 @@ app.post("/api/analyze", async (req, res, next) => {
       title: job.data.title.trim(),
       description: job.data.description.trim(),
       url: job.data.url.trim(),
-    });
+    }, readCallOptions(req.body));
     res.json({ record });
   } catch (error) {
     next(error);
@@ -95,7 +103,7 @@ app.post("/api/email", async (req, res, next) => {
       emailSubject: "",
       emailBody: "",
       emailError: "",
-    });
+    }, readCallOptions(req.body));
     res.json(email);
   } catch (error) {
     next(error);

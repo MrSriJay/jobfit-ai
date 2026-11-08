@@ -13,6 +13,8 @@ const EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "m
 const requestedEffort = (process.env.OPENAI_REASONING_EFFORT ?? "low").trim().toLowerCase();
 
 export const MODEL = (process.env.OPENAI_MODEL ?? "gpt-5.6-sol").trim() || "gpt-5.6-sol";
+const allowBuiltin = (process.env.OPENAI_ALLOW_BUILTIN ?? "true").trim().toLowerCase();
+export const ALLOW_BUILTIN = allowBuiltin !== "false" && allowBuiltin !== "0" && allowBuiltin !== "no";
 export const REASONING_EFFORT = EFFORTS.has(requestedEffort) ? requestedEffort : "low";
 export const MAX_CV_CHARS = 80_000;
 export const MAX_JOB_CHARS = 40_000;

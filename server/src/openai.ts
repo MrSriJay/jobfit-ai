@@ -6,7 +6,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ZodType } from "zod";
 
-import { MAX_CV_CHARS, MAX_JOB_CHARS, MODEL, REASONING_EFFORT, ROOT } from "./config.js";
+import { ALLOW_BUILTIN, MAX_CV_CHARS, MAX_JOB_CHARS, MODEL, REASONING_EFFORT, ROOT } from "./config.js";
 import { AppError, publicErrorText } from "./errors.js";
 import { classify, orderCategories, weightedScore } from "./score.js";
 import {
@@ -31,16 +31,74 @@ function loadPrompt(filename: string): string {
   return text;
 }
 
+export interface CallOptions {
+  apiKey?: string;
+  model?: string;
+  language?: "en" | "si" | "ta";
+}
+
+export function readCallOptions(body: unknown): CallOptions {
+  if (!body || typeof body !== "object") return { language: "en" };
+  const options = (body as { options?: unknown }).options;
+  if (!options || typeof options !== "object") return { language: "en" };
+  const record = options as Record<string, unknown>;
+  const language = record.language === "si" || record.language === "ta" ? record.language : "en";
+  if (record.useOwnKey !== true) return { language };
+  return {
+    language,
+    apiKey: typeof record.apiKey === "string" ? record.apiKey : "",
+    model: typeof record.model === "string" ? record.model : "",
+  };
+}
+
 function apiKey(): string {
   const key = process.env.OPENAI_API_KEY?.trim() ?? "";
   if (!key) {
-    throw new AppError("Add OPENAI_API_KEY to the .env file in the project folder, then restart the server.", 503);
+    throw new AppError("The built-in key is unavailable. Add your API key and model in Settings.", 503);
   }
   return key;
 }
 
+function credentials(options?: CallOptions): { apiKey: string; model: string } {
+  const key = options?.apiKey?.trim() ?? "";
+  const model = options?.model?.trim() ?? "";
+  const usingOwn = options?.apiKey !== undefined || options?.model !== undefined;
+  if (!ALLOW_BUILTIN || usingOwn) {
+    if (!usingOwn) throw new AppError("Add your API key and model in Settings.", 400);
+    if (key.length < 20 || key.length > 300 || /\s/.test(key)) {
+      throw new AppError("Enter a valid OpenAI API key in Settings.", 400);
+    }
+    if (!/^[A-Za-z0-9._:-]{2,80}$/.test(model)) {
+      throw new AppError("Enter the model name to use with your API key.", 400);
+    }
+    return { apiKey: key, model };
+  }
+  return { apiKey: apiKey(), model: MODEL };
+}
+
+function withLanguage(instructions: string, language: CallOptions["language"]): string {
+  const name = language === "si" ? "Sinhala" : language === "ta" ? "Tamil" : "English";
+  return `${instructions}\n\nWrite every natural-language sentence in ${name}. Keep JSON keys, enum values, numbers, and URLs unchanged. Keep established technical terms in their usual written form.`;
+}
+
 export function apiKeyConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
+export async function checkApiKey(options?: CallOptions): Promise<{ configured: boolean; working: boolean }> {
+  let chosen: { apiKey: string; model: string };
+  try {
+    chosen = credentials(options);
+  } catch {
+    return { configured: false, working: false };
+  }
+  const client = new OpenAI({ apiKey: chosen.apiKey, timeout: 20_000, maxRetries: 0 });
+  try {
+    await client.models.retrieve(chosen.model);
+    return { configured: true, working: true };
+  } catch {
+    return { configured: true, working: false };
+  }
 }
 
 function rememberProfile(hash: string, profile: CandidateProfile): void {
@@ -53,11 +111,18 @@ function rememberProfile(hash: string, profile: CandidateProfile): void {
   }
 }
 
-async function parseStructured<T>(instructions: string, userInput: string, schema: ZodType<T>, name: string): Promise<T> {
-  const client = new OpenAI({ apiKey: apiKey(), timeout: 180_000 });
+async function parseStructured<T>(
+  instructions: string,
+  userInput: string,
+  schema: ZodType<T>,
+  name: string,
+  options?: CallOptions,
+): Promise<T> {
+  const chosen = credentials(options);
+  const client = new OpenAI({ apiKey: chosen.apiKey, timeout: 180_000 });
   try {
     const response = await client.responses.parse({
-      model: MODEL,
+      model: chosen.model,
       instructions,
       input: userInput,
       text: { format: zodTextFormat(schema, name) },
@@ -74,7 +139,7 @@ async function parseStructured<T>(instructions: string, userInput: string, schem
   }
 }
 
-export async function extractProfile(cvText: string): Promise<{ profile: CandidateProfile; truncated: boolean; fromCache: boolean }> {
+export async function extractProfile(cvText: string, options?: CallOptions): Promise<{ profile: CandidateProfile; truncated: boolean; fromCache: boolean }> {
   const clipped = cvText.trim().slice(0, MAX_CV_CHARS);
   const truncated = cvText.trim().length > MAX_CV_CHARS;
   const hash = createHash("sha256").update(clipped).digest("hex");
@@ -87,21 +152,23 @@ export async function extractProfile(cvText: string): Promise<{ profile: Candida
     `CV TEXT:\n${clipped}${note}`,
     candidateProfileSchema,
     "candidate_profile",
+    options,
   );
   rememberProfile(hash, profile);
   return { profile, truncated, fromCache: false };
 }
 
-export async function assessMatch(profile: CandidateProfile, job: JobPosting): Promise<{ match: MatchResult; truncated: boolean }> {
+export async function assessMatch(profile: CandidateProfile, job: JobPosting, options?: CallOptions): Promise<{ match: MatchResult; truncated: boolean }> {
   const description = job.description.trim();
   const truncated = description.length > MAX_JOB_CHARS;
   const posted = { ...job, description: description.slice(0, MAX_JOB_CHARS) };
   const note = truncated ? "\n\nThe job description was truncated. Judge only the text included here." : "";
   const match = await parseStructured(
-    loadPrompt("job_matching.txt"),
+    withLanguage(loadPrompt("job_matching.txt"), options?.language),
     ["CANDIDATE PROFILE:", JSON.stringify(profile), "JOB:", JSON.stringify(posted)].join("\n\n") + note,
     matchResultSchema,
     "match_result",
+    options,
   );
   return { match, truncated };
 }
@@ -112,6 +179,7 @@ export async function generateEmail(
   match: MatchResult,
   score: number,
   classification: string,
+  options?: CallOptions,
 ): Promise<EmailDraft> {
   const brief = {
     classification,
@@ -121,7 +189,7 @@ export async function generateEmail(
     matchedSkills: match.matchedSkills.slice(0, 12),
   };
   return parseStructured(
-    loadPrompt("email_generation.txt"),
+    withLanguage(loadPrompt("email_generation.txt"), options?.language),
     [
       "CANDIDATE PROFILE:",
       JSON.stringify(profile),
@@ -132,6 +200,7 @@ export async function generateEmail(
     ].join("\n\n"),
     emailDraftSchema,
     "email_draft",
+    options,
   );
 }
 
@@ -148,8 +217,8 @@ function unique(items: string[]): string[] {
   return values;
 }
 
-export async function createAnalysis(profile: CandidateProfile, job: JobPosting): Promise<AnalysisRecord> {
-  const { match } = await assessMatch(profile, job);
+export async function createAnalysis(profile: CandidateProfile, job: JobPosting, options?: CallOptions): Promise<AnalysisRecord> {
+  const { match } = await assessMatch(profile, job, options);
   const categories = orderCategories(match.categories);
   const score = weightedScore(categories);
   const classification = classify(score);
@@ -157,7 +226,7 @@ export async function createAnalysis(profile: CandidateProfile, job: JobPosting)
   let emailBody = "";
   let emailError = "";
   try {
-    const email = await generateEmail(profile, job, { ...match, categories }, score, classification);
+    const email = await generateEmail(profile, job, { ...match, categories }, score, classification, options);
     emailSubject = email.subject.trim();
     emailBody = email.body.trim();
   } catch (error) {
@@ -183,7 +252,7 @@ export async function createAnalysis(profile: CandidateProfile, job: JobPosting)
   };
 }
 
-export async function regenerateEmail(record: AnalysisRecord): Promise<EmailDraft> {
+export async function regenerateEmail(record: AnalysisRecord, options?: CallOptions): Promise<EmailDraft> {
   const match: MatchResult = {
     summary: record.summary,
     categories: record.categories,
@@ -193,6 +262,6 @@ export async function regenerateEmail(record: AnalysisRecord): Promise<EmailDraf
     recommendations: record.recommendations,
     apply: record.apply,
   };
-  const email = await generateEmail(record.profile, record.job, match, record.score, record.classification);
+  const email = await generateEmail(record.profile, record.job, match, record.score, record.classification, options);
   return { subject: email.subject.trim(), body: email.body.trim() };
 }

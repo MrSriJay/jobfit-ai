@@ -7,42 +7,46 @@ import { FlowTip } from "../components/Tooltip";
 import { buildReportPdf, downloadPdf, safeFilename } from "../pdf";
 import { useStore } from "../state";
 import { dismissTip } from "../tips";
-import { AREA_LABELS, AREA_ORDER, CRITERIA, GAP_LABELS, VERDICT_LABELS, type AnalysisRecord } from "../types";
+import { bandLabel, usePreferences } from "../preferences";
+import { AREA_ORDER, CRITERIA, type AnalysisRecord, type Criterion } from "../types";
 
 const MAILTO_LIMIT = 1800;
-const SECTIONS = [
-  ["overview", "Overview"],
-  ["scores", "Scores"],
-  ["skills", "Skills"],
-  ["advice", "Advice"],
-] as const;
+const SECTION_IDS = ["overview", "scores", "skills", "advice"] as const;
 
-type SectionId = (typeof SECTIONS)[number][0];
+type SectionId = (typeof SECTION_IDS)[number];
 
 function mailto(subject: string, body: string): string | null {
   const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return url.length > MAILTO_LIMIT ? null : url;
 }
 
+function sectionLabel(id: SectionId, labels: { overview: string; scoresTab: string; skillsTab: string; adviceTab: string }): string {
+  if (id === "overview") return labels.overview;
+  if (id === "scores") return labels.scoresTab;
+  if (id === "skills") return labels.skillsTab;
+  return labels.adviceTab;
+}
+
 export function ResultsPage() {
   const { snapshot, replaceAnalysis, selectAnalysis, notify } = useStore();
+  const { m } = usePreferences();
   const [params] = useSearchParams();
   const record = snapshot.history.find((item) => item.id === params.get("id")) ?? null;
 
   if (!record) {
     return (
       <section className="page">
-        <h1>Match analysis</h1>
+        <h1>{m.analysis.title}</h1>
         {snapshot.history.length === 0 ? (
           <div className="empty">
             <Sparkles size={18} />
             <div>
-              <strong>No analysis yet</strong>
-              <p>Analyze a job description to see a match report and an application email.</p>
+              <strong>{m.analysis.emptyTitle}</strong>
+              <p>{m.analysis.emptyText}</p>
             </div>
           </div>
         ) : (
-          <FlowTip id="history" block label="These are the matches saved in this browser. Open one to read the report.">
+          <FlowTip id="history" block label={m.analysis.tipHistory}>
             <div className="analysis-list">
               {snapshot.history.map((item) => {
                 const company = item.job.company.trim();
@@ -52,9 +56,9 @@ export function ResultsPage() {
                       <Briefcase size={18} />
                     </span>
                     <span className="analysis-copy">
-                      <strong>{item.job.title || "Untitled role"}</strong>
+                      <strong>{item.job.title || m.analysis.untitled}</strong>
                       <small>
-                        {company || "No company"} · {item.createdAt.slice(0, 10)}
+                        {company || m.analysis.noCompany} · {item.createdAt.slice(0, 10)}
                       </small>
                     </span>
                     <span className="analysis-result">
@@ -62,7 +66,7 @@ export function ResultsPage() {
                         {item.score}
                         <span>/100</span>
                       </strong>
-                      <small>{item.classification}</small>
+                      <small>{bandLabel(item.classification, m.bands)}</small>
                     </span>
                   </Link>
                 );
@@ -91,6 +95,7 @@ function Report({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(record.emailError);
   const [score, setScore] = useState(0);
+  const { m, fill } = usePreferences();
   const [tab, setTab] = useState<SectionId>("overview");
   const company = record.job.company.trim();
   const heading = company ? `${record.job.title} at ${company}` : record.job.title;
@@ -106,7 +111,7 @@ function Report({
     const marker = 150;
     const onScroll = () => {
       let current: SectionId = "overview";
-      for (const [id] of SECTIONS) {
+      for (const id of SECTION_IDS) {
         const node = document.getElementById(id);
         if (node && node.getBoundingClientRect().top <= marker) current = id;
       }
@@ -137,7 +142,7 @@ function Report({
   const copyEmail = async () => {
     try {
       await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
-      notify("Email copied");
+      notify(m.analysis.copied);
     } catch {
       setError("The browser blocked clipboard access. Select the email text and copy it manually.");
     }
@@ -156,9 +161,9 @@ function Report({
       setSubject(email.subject);
       setBody(email.body);
       onChange({ ...record, emailSubject: email.subject, emailBody: email.body, emailError: "" });
-      notify("Email updated");
+      notify(m.analysis.updated);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The email could not be drafted.");
+      setError(caught instanceof Error ? caught.message : m.analysis.emailFailed);
     } finally {
       setBusy(false);
     }
@@ -173,37 +178,37 @@ function Report({
         <div className="analysis-title">
           <div className="analysis-heading">
             <Link className="back-link" to="/analysis">
-              <ArrowLeft size={15} /> Saved analyses
+              <ArrowLeft size={15} /> {m.analysis.back}
             </Link>
-            <h1>Match analysis</h1>
+            <h1>{m.analysis.title}</h1>
           </div>
         </div>
       </header>
       <div className="analysis-main">
       <div className="card report-hero">
         <div className="score-hero">
-          <div className="ring" style={{ ["--p" as string]: score }} aria-label={`Match score ${record.score} out of 100`}>
+          <div className="ring" style={{ ["--p" as string]: score }} aria-label={fill(m.analysis.scoreAria, { score: record.score })}>
             <strong>{record.score}</strong>
-            <span>out of 100</span>
+            <span>{m.analysis.outOf}</span>
           </div>
           <div>
-            <p className="band">{record.classification}</p>
+            <p className="band">{bandLabel(record.classification, m.bands)}</p>
             <h2>{heading}</h2>
             <p className="fine">{record.createdAt.replace("T", " ").replace("Z", " UTC")}</p>
             {posting ? (
               <a className="text-link" href={posting} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} /> Job posting
+                <ExternalLink size={14} /> {m.analysis.posting}
               </a>
             ) : null}
           </div>
         </div>
       </div>
 
-      <FlowTip id="analysis" block label="These jump to each part of the report. The full analysis stays on the page.">
-      <div className="tabs jump-tabs" role="tablist" aria-label="Analysis sections">
-        {SECTIONS.map(([id, label]) => (
+      <FlowTip id="analysis" block label={m.analysis.tipTabs}>
+      <div className="tabs jump-tabs" role="tablist" aria-label={m.analysis.sections}>
+        {SECTION_IDS.map((id) => (
           <button key={id} className={tab === id ? "active" : ""} type="button" role="tab" aria-selected={tab === id} onClick={() => jumpTo(id)}>
-            {label}
+            {sectionLabel(id, m.analysis)}
           </button>
         ))}
       </div>
@@ -211,52 +216,51 @@ function Report({
 
       <div id="overview" className="report-section">
         <div className={`banner ${verdictClass}`}>
-          <strong>{VERDICT_LABELS[record.apply.verdict]}</strong>
+          <strong>{m.verdict[record.apply.verdict]}</strong>
           <p>{record.apply.explanation}</p>
         </div>
         <article className="card">
-          <h2>Match summary</h2>
+          <h2>{m.analysis.summary}</h2>
           <p>{record.summary}</p>
         </article>
       </div>
 
       <article id="scores" className="card report-section">
-        <h2>Category scores</h2>
+        <h2>{m.analysis.scores}</h2>
         <ul className="bars">
           {record.categories.map((category) => {
             const label = CRITERIA.find((item) => item.key === category.criterion);
             return (
               <li key={category.criterion}>
                 <div>
-                  <span>{label?.label ?? category.criterion}</span>
+                  <span>{m.criteria[category.criterion as Criterion]}</span>
                   <strong>{category.score}</strong>
                 </div>
                 <div className="bar" aria-hidden="true">
                   <span style={{ width: `${category.score}%` }} />
                 </div>
-                <small>{label?.weight} of the total</small>
+                <small>{label?.weight} {m.analysis.ofTotal}</small>
               </li>
             );
           })}
         </ul>
         <details className="preview">
-          <summary>How this score is calculated</summary>
-          <p>Each category is scored from the CV and the job. The percentage is the weighted sum, rounded to the nearest point.</p>
+          <summary>{m.analysis.how}</summary>
+          <p>{m.analysis.howBody}</p>
           <ul className="plain">
             {CRITERIA.map((item) => (
               <li key={item.key}>
-                {item.label} · {item.weight}
+                {m.criteria[item.key]} · {item.weight}
               </li>
             ))}
           </ul>
-          <p className="fine">85–100 excellent · 70–84 strong · 50–69 partial · 30–49 weak · 0–29 poor</p>
+          <p className="fine">{m.analysis.bandLine}</p>
         </details>
         {record.categories.map((category) => {
-          const label = CRITERIA.find((item) => item.key === category.criterion);
           return (
             <details key={`${category.criterion}-note`} className="note">
               <summary>
-                {label?.label} · {category.score}/100
+                {m.criteria[category.criterion as Criterion]} · {category.score}/100
               </summary>
               <p>{category.explanation}</p>
               {category.evidence.map((item) => (
@@ -271,9 +275,9 @@ function Report({
 
       <div id="skills" className="report-section">
       <article className="card">
-        <h2>Matched skills</h2>
+        <h2>{m.analysis.matched}</h2>
         {record.matchedSkills.length === 0 ? (
-          <p className="fine">No overlapping skills were identified.</p>
+          <p className="fine">{m.analysis.noMatched}</p>
         ) : (
           <div className="chips">
             {record.matchedSkills.map((skill) => (
@@ -286,12 +290,12 @@ function Report({
       </article>
 
       <article className="card">
-        <h2>Missing or weak skills</h2>
-        {record.gaps.length === 0 ? <p className="fine">No important gaps were identified.</p> : null}
+        <h2>{m.analysis.gaps}</h2>
+        {record.gaps.length === 0 ? <p className="fine">{m.analysis.noGaps}</p> : null}
         {record.gaps.map((gap) => (
           <div key={`${gap.skill}-${gap.status}`} className="note-card">
             <strong>{gap.skill}</strong>
-            <p className="fine">{GAP_LABELS[gap.status]}</p>
+            <p className="fine">{m.gap[gap.status]}</p>
             <p>{gap.explanation}</p>
           </div>
         ))}
@@ -300,8 +304,8 @@ function Report({
 
       <div id="advice" className="report-section">
       <article className="card">
-        <h2>Candidate strengths</h2>
-        {record.strengths.length === 0 ? <p className="fine">No standout strengths were identified for this role.</p> : null}
+        <h2>{m.analysis.strengths}</h2>
+        {record.strengths.length === 0 ? <p className="fine">{m.analysis.noStrengths}</p> : null}
         {record.strengths.map((strength) => (
           <div key={strength.title} className="note-card">
             <strong>{strength.title}</strong>
@@ -311,16 +315,16 @@ function Report({
       </article>
 
       <article className="card">
-        <h2>Recommendations</h2>
+        <h2>{m.analysis.recommendations}</h2>
         {AREA_ORDER.every((area) => !record.recommendations.some((item) => item.area === area)) ? (
-          <p className="fine">No extra recommendations were returned.</p>
+          <p className="fine">{m.analysis.noRecommendations}</p>
         ) : null}
         {AREA_ORDER.map((area) => {
           const advice = record.recommendations.filter((item) => item.area === area);
           if (advice.length === 0) return null;
           return (
             <div key={area}>
-              <h3>{AREA_LABELS[area]}</h3>
+              <h3>{m.area[area]}</h3>
               <ul>
                 {advice.map((item) => (
                   <li key={item.advice}>{item.advice}</li>
@@ -333,18 +337,18 @@ function Report({
       </div>
       </div>
 
-      <aside className="card draft-email" aria-label="Draft email">
-        <FlowTip id="email" label="Edit the draft here. Copy it, download the report, or open it in your mail app.">
-          <h2>Draft email</h2>
+      <aside className="card draft-email" aria-label={m.analysis.draft}>
+        <FlowTip id="email" label={m.analysis.tipEmail}>
+          <h2>{m.analysis.draft}</h2>
         </FlowTip>
         {error ? (
           <div className="banner danger">
-            <strong>Email draft unavailable</strong>
+            <strong>{m.analysis.draftFail}</strong>
             <p>{error}</p>
           </div>
         ) : null}
         <label className="field">
-          <span>Subject</span>
+          <span>{m.analysis.subject}</span>
           <input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
@@ -352,25 +356,25 @@ function Report({
           />
         </label>
         <label className="field draft-body">
-          <span>Email</span>
+          <span>{m.analysis.email}</span>
           <textarea value={body} onChange={(event) => setBody(event.target.value)} onBlur={() => persistEmail(subject, body)} />
         </label>
         <div className="draft-actions">
           <button className="btn ghost" type="button" onClick={() => void copyEmail()}>
-            <Copy size={16} /> Copy
+            <Copy size={16} /> {m.analysis.copy}
           </button>
           <button className="btn ghost" type="button" disabled={busy} onClick={() => void regenerate()}>
-            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Regenerate
+            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} {m.analysis.regenerate}
           </button>
           <button className="btn ghost wide" type="button" onClick={() => void download()}>
-            <Download size={16} /> Download PDF
+            <Download size={16} /> {m.analysis.download}
           </button>
           {mail ? (
             <a className="btn primary wide" href={mail}>
-              <Mail size={16} /> Open in email
+              <Mail size={16} /> {m.analysis.openMail}
             </a>
           ) : (
-            <p className="fine wide">This email is too long to open in a mail app. Copy it instead.</p>
+            <p className="fine wide">{m.analysis.tooLong}</p>
           )}
         </div>
       </aside>

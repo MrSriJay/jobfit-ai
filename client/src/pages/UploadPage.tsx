@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { extractProfile, parseCv } from "../api";
 import { ProfileForm } from "../components/ProfileForm";
 import { FlowTip, Tooltip } from "../components/Tooltip";
+import { ownCredentialsReady, usePreferences } from "../preferences";
 import { useStore } from "../state";
 import { dismissTip } from "../tips";
 import type { CandidateProfile } from "../types";
@@ -47,7 +48,8 @@ function profileHasContent(profile: CandidateProfile): boolean {
 }
 
 export function UploadPage() {
-  const { configured, snapshot, profileNonce, saveProfile, clearCv, notify } = useStore();
+  const { configured, allowBuiltin, snapshot, profileNonce, saveProfile, clearCv, notify } = useStore();
+  const { prefs, m, fill } = usePreferences();
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState<"parse" | "extract" | null>(null);
   const [error, setError] = useState("");
@@ -66,12 +68,12 @@ export function UploadPage() {
     setError("");
     setNotice("");
     if (file.size > MAX_BYTES) {
-      setError("That file is larger than 10 MB.");
+      setError(m.upload.tooLarge);
       return;
     }
     const name = file.name.toLowerCase();
     if (!name.endsWith(".pdf") && !name.endsWith(".docx")) {
-      setError(name.endsWith(".doc") ? "Save the CV as DOCX or PDF and upload that file." : "Upload a PDF or DOCX file.");
+      setError(name.endsWith(".doc") ? m.upload.docHint : m.upload.typeHint);
       return;
     }
     dismissTip("upload");
@@ -80,7 +82,7 @@ export function UploadPage() {
       setParsed(await parseCv(file));
     } catch (caught) {
       setParsed(null);
-      setError(caught instanceof Error ? caught.message : "The file could not be read.");
+      setError(caught instanceof Error ? caught.message : m.upload.readFailed);
     } finally {
       setBusy(null);
     }
@@ -88,6 +90,10 @@ export function UploadPage() {
 
   const extract = async () => {
     if (!parsed) return;
+    if ((!allowBuiltin || prefs.useOwnKey) && !ownCredentialsReady({ ...prefs, useOwnKey: true })) {
+      setError(m.upload.ownKeyBody);
+      return;
+    }
     dismissTip("extract");
     setBusy("extract");
     setError("");
@@ -95,12 +101,12 @@ export function UploadPage() {
     try {
       const result = await extractProfile(parsed.text);
       saveProfile(result.profile, parsed.filename);
-      if (result.truncated) setNotice("The CV was shortened before extraction. Review the profile for missing sections.");
-      else if (result.fromCache) setNotice("This CV text was already extracted in this session.");
-      else setNotice("Review the profile, then save any edits.");
-      notify("Profile extracted");
+      if (result.truncated) setNotice(m.upload.reviewShort);
+      else if (result.fromCache) setNotice(m.upload.reviewCached);
+      else setNotice(m.upload.review);
+      notify(m.upload.extracted);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The profile could not be extracted.");
+      setError(caught instanceof Error ? caught.message : m.upload.extractFailed);
     } finally {
       setBusy(null);
     }
@@ -108,30 +114,30 @@ export function UploadPage() {
 
   return (
     <section className="page">
-      <h1>Upload CV</h1>
-      <p className="lede">Add a PDF or DOCX resume once, or type the profile yourself. Later job checks reuse it.</p>
+      <h1>{m.upload.title}</h1>
+      <p className="lede">{m.upload.lede}</p>
 
-      {configured === "missing" ? (
+      {(allowBuiltin ? configured === "missing" && !prefs.useOwnKey : !ownCredentialsReady({ ...prefs, useOwnKey: true })) ? (
         <div className="banner danger">
-          <strong>OpenAI API key required</strong>
-          <p>Add OPENAI_API_KEY to the .env file in the project folder, then restart the server.</p>
+          <strong>{!allowBuiltin || prefs.useOwnKey ? m.upload.ownKeyTitle : m.upload.keyTitle}</strong>
+          <p>{!allowBuiltin || prefs.useOwnKey ? m.upload.ownKeyBody : m.upload.keyBody}</p>
         </div>
       ) : null}
       {configured === "offline" ? (
         <div className="banner danger">
-          <strong>API server is not running</strong>
-          <p>Start the app with npm run dev so CV files can be read.</p>
+          <strong>{m.upload.offlineTitle}</strong>
+          <p>{m.upload.offlineBody}</p>
         </div>
       ) : null}
       {error ? (
         <div className="banner danger">
-          <strong>Could not continue</strong>
+          <strong>{m.upload.couldNot}</strong>
           <p>{error}</p>
         </div>
       ) : null}
       {notice ? (
         <div className="banner ok">
-          <strong>Profile ready</strong>
+          <strong>{m.upload.ready}</strong>
           <p>{notice}</p>
         </div>
       ) : null}
@@ -140,7 +146,7 @@ export function UploadPage() {
         <div className="card">
           <div className="profile-head">
             <div>
-              <h2>Saved profile</h2>
+              <h2>{m.upload.saved}</h2>
               {snapshot.cvFilename ? (
                 <p className="profile-file">
                   <FileText size={15} aria-hidden="true" />
@@ -148,8 +154,8 @@ export function UploadPage() {
                 </p>
               ) : null}
             </div>
-            <Tooltip label={snapshot.cvFilename ? "Delete this CV and the saved profile" : "Delete the saved profile"}>
-              <button className="icon-button danger" type="button" aria-label={snapshot.cvFilename ? "Delete CV" : "Delete profile"} onClick={() => setConfirming(true)}>
+            <Tooltip label={snapshot.cvFilename ? m.upload.deleteCvTip : m.upload.deleteProfileTip}>
+              <button className="icon-button danger" type="button" aria-label={snapshot.cvFilename ? m.upload.deleteCv : m.upload.deleteProfile} onClick={() => setConfirming(true)}>
                 <Trash2 size={16} />
               </button>
             </Tooltip>
@@ -159,12 +165,12 @@ export function UploadPage() {
             profile={snapshot.profile}
             onSave={(profile) => {
               saveProfile(profile);
-              notify("Profile saved");
+              notify(m.upload.savedToast);
             }}
             next={
-              <FlowTip id="next" block label="Check the profile, then continue. The next step is the job description.">
+              <FlowTip id="next" block label={m.upload.tipNext}>
                 <Link className="btn primary" to="/job" onClick={() => dismissTip("next")}>
-                  Next <ArrowRight size={16} />
+                  {m.upload.next} <ArrowRight size={16} />
                 </Link>
               </FlowTip>
             }
@@ -172,7 +178,7 @@ export function UploadPage() {
         </div>
       ) : (
         <div className="upload-flow">
-          <FlowTip id="upload" block above label="Drop a text-based PDF or DOCX here. This is the only upload. Later jobs reuse the profile.">
+          <FlowTip id="upload" block above label={m.upload.tipUpload}>
           <label
             className={over ? "drop over" : "drop"}
             onDragOver={(event) => {
@@ -197,14 +203,14 @@ export function UploadPage() {
             <span className="drop-icon">
               {busy === "parse" ? <LoaderCircle className="spin" size={28} /> : <FileUp size={28} />}
             </span>
-            <strong>{over ? "Release to read the CV" : "Drop your CV here"}</strong>
-            <span>or click to browse · PDF or DOCX · 10 MB</span>
+            <strong>{over ? m.upload.release : m.upload.drop}</strong>
+            <span>{m.upload.browse}</span>
           </label>
           </FlowTip>
 
           {manual ? null : (
             <div className="manual-choice">
-              <span>or</span>
+              <span>{m.upload.or}</span>
               <button
                 className="btn ghost"
                 type="button"
@@ -214,7 +220,7 @@ export function UploadPage() {
                   setManual(true);
                 }}
               >
-                <PenLine size={16} /> Add manually
+                <PenLine size={16} /> {m.upload.manual}
               </button>
             </div>
           )}
@@ -223,48 +229,48 @@ export function UploadPage() {
             <div className="card file-card">
               <div>
                 <strong>{parsed.filename}</strong>
-                <p>{parsed.characters.toLocaleString()} characters</p>
+                <p>{fill(m.upload.characters, { count: parsed.characters.toLocaleString() })}</p>
               </div>
-              <FlowTip id="extract" label="Extract reads the CV and fills the profile. Review it before you continue.">
+              <FlowTip id="extract" label={m.upload.tipExtract}>
                 <button className="btn primary" type="button" disabled={busy !== null} onClick={() => void extract()}>
                   {busy === "extract" ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-                  Extract profile
+                  {m.upload.extract}
                 </button>
               </FlowTip>
             </div>
           ) : null}
           {parsed ? (
             <details className="preview">
-              <summary>Text preview</summary>
-              <pre>{parsed.preview || "No text."}</pre>
+              <summary>{m.upload.preview}</summary>
+              <pre>{parsed.preview || m.upload.noText}</pre>
             </details>
           ) : null}
           {manual && !parsed ? null : (
-            <p className="fine">Extracting a profile sends the CV text to OpenAI. The profile is then saved in this browser, not in an application database.</p>
+            <p className="fine">{m.upload.note}</p>
           )}
 
           {manual ? (
         <div className="card" ref={manualRef}>
           <div className="profile-head">
             <div>
-              <h2>Your profile</h2>
-              <p className="profile-file">Filled in by you. It stays in this browser.</p>
+              <h2>{m.upload.manualTitle}</h2>
+              <p className="profile-file">{m.upload.manualNote}</p>
             </div>
             <button className="btn ghost" type="button" onClick={() => setManual(false)}>
-              Back
+              {m.upload.back}
             </button>
           </div>
           <ProfileForm
             profile={emptyProfile()}
             onSave={(profile) => {
               if (!profileHasContent(profile)) {
-                setError("Add a name, a skill, or some experience before saving.");
+                setError(m.upload.needContent);
                 setNotice("");
                 return;
               }
               setError("");
               saveProfile(profile);
-              notify("Profile saved");
+              notify(m.upload.savedToast);
             }}
           />
         </div>
@@ -272,8 +278,8 @@ export function UploadPage() {
         <div className="empty">
           <Sparkles size={18} />
           <div>
-            <strong>No profile yet</strong>
-            <p>Upload a CV, or add the profile yourself, and reuse it for every job.</p>
+            <strong>{m.upload.emptyTitle}</strong>
+            <p>{m.upload.emptyText}</p>
           </div>
         </div>
           )}
@@ -283,27 +289,23 @@ export function UploadPage() {
         ? createPortal(
             <div className="modal-back" role="presentation" onClick={() => setConfirming(false)}>
               <div className="modal" role="dialog" aria-labelledby="delete-cv-title" onClick={(event) => event.stopPropagation()}>
-                <h2 id="delete-cv-title">{snapshot.cvFilename ? "Delete this CV?" : "Delete this profile?"}</h2>
-                <p>
-                  {snapshot.cvFilename
-                    ? "This removes the saved CV and the profile from this browser. Match history stays until you clear local data."
-                    : "This removes the saved profile from this browser. Match history stays until you clear local data."}
-                </p>
+                <h2 id="delete-cv-title">{snapshot.cvFilename ? m.upload.deleteCvTitle : m.upload.deleteProfileTitle}</h2>
+                <p>{snapshot.cvFilename ? m.upload.deleteCvBody : m.upload.deleteProfileBody}</p>
                 <div className="row">
                   <button className="btn ghost" type="button" onClick={() => setConfirming(false)}>
-                    Cancel
+                    {m.upload.cancel}
                   </button>
                   <button
                     className="btn danger"
                     type="button"
                     onClick={() => {
-                      clearCv();
+                      clearCv(m.upload.removed);
                       setParsed(null);
                       setNotice("");
                       setConfirming(false);
                     }}
                   >
-                    <Trash2 size={16} /> {snapshot.cvFilename ? "Delete CV" : "Delete profile"}
+                    <Trash2 size={16} /> {snapshot.cvFilename ? m.upload.deleteCv : m.upload.deleteProfile}
                   </button>
                 </div>
               </div>

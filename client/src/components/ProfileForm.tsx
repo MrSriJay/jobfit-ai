@@ -1,6 +1,7 @@
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { usePreferences } from "../preferences";
 import type { CandidateProfile, CertificationItem, EducationItem, ExperienceItem, ProjectItem } from "../types";
 
 function unique(parts: string[], casefold = true): string[] {
@@ -46,6 +47,7 @@ export function ProfileForm({
   onSave: (profile: CandidateProfile) => void;
   next?: ReactNode;
 }) {
+  const { m } = usePreferences();
   const [draft, setDraft] = useState(() => ({
     ...profile,
     phone: textList(profile.phone, /\s*(?:;|\||\n|\/)\s*/),
@@ -95,7 +97,7 @@ export function ProfileForm({
         save();
       }}
     >
-      <div className="tabs" role="tablist" aria-label="Profile sections">
+      <div className="tabs" role="tablist" aria-label={m.profile.sections}>
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -105,7 +107,7 @@ export function ProfileForm({
             aria-selected={tab === item.id}
             onClick={() => setTab(item.id)}
           >
-            {item.label}
+            {m.profile[item.id]}
             {counts[item.id] ? <span className="tab-count">{counts[item.id]}</span> : null}
           </button>
         ))}
@@ -114,38 +116,38 @@ export function ProfileForm({
       {tab === "about" ? (
         <div className="stack">
           <div className="grid-2">
-            <Field label="Name" value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
-            <Field label="Email" value={draft.email} onChange={(email) => setDraft({ ...draft, email })} />
+            <Field label={m.profile.name} value={draft.name} onChange={(name) => setDraft({ ...draft, name })} />
+            <Field label={m.profile.email} value={draft.email} onChange={(email) => setDraft({ ...draft, email })} />
           </div>
-          <Field label="Location" value={draft.location} onChange={(location) => setDraft({ ...draft, location })} />
+          <Field label={m.profile.location} value={draft.location} onChange={(location) => setDraft({ ...draft, location })} />
           <EntryList
-            label="Phone"
-            addLabel="Add phone"
+            label={m.profile.phone}
+            addLabel={m.profile.addPhone}
             placeholder="+94 ..."
             values={draft.phone}
             onChange={(phone) => setDraft({ ...draft, phone })}
           />
           <EntryList
-            label="Links"
-            addLabel="Add link"
+            label={m.profile.links}
+            addLabel={m.profile.addLink}
             placeholder="https://"
             values={draft.links}
             onChange={(links) => setDraft({ ...draft, links })}
           />
-          <Area label="Professional summary" value={draft.professionalSummary} onChange={(professionalSummary) => setDraft({ ...draft, professionalSummary })} />
+          <Area label={m.profile.summary} value={draft.professionalSummary} onChange={(professionalSummary) => setDraft({ ...draft, professionalSummary })} />
         </div>
       ) : null}
 
       {tab === "skills" ? (
         <div className="grid-2">
-          <Area label="Skills" hint="One skill per line." value={draft.skills.join("\n")} onChange={(value) => setDraft({ ...draft, skills: value.split("\n") })} />
-          <Area label="Technologies and tools" hint="One tool per line." value={draft.technologies.join("\n")} onChange={(value) => setDraft({ ...draft, technologies: value.split("\n") })} />
+          <Area label={m.profile.skills} hint={m.profile.skillsHint} value={draft.skills.join("\n")} onChange={(value) => setDraft({ ...draft, skills: value.split("\n") })} />
+          <Area label={m.profile.tools} hint={m.profile.toolsHint} value={draft.technologies.join("\n")} onChange={(value) => setDraft({ ...draft, technologies: value.split("\n") })} />
         </div>
       ) : null}
 
       {tab === "experience" ? (
         <div className="stack">
-          {draft.experience.length === 0 ? <p className="fine">No roles yet.</p> : null}
+          {draft.experience.length === 0 ? <p className="fine">{m.profile.noRoles}</p> : null}
           {draft.experience.map((item, index) => (
             <ExperienceEditor
               key={index}
@@ -155,13 +157,13 @@ export function ProfileForm({
               onRemove={() => setDraft({ ...draft, experience: draft.experience.filter((_, rowIndex) => rowIndex !== index) })}
             />
           ))}
-          <AddButton label="Add role" onClick={() => setDraft({ ...draft, experience: [...draft.experience, { title: "", company: "", start: "", end: "", highlights: [] }] })} />
+          <AddButton label={m.profile.addRole} onClick={() => setDraft({ ...draft, experience: [...draft.experience, { title: "", company: "", start: "", end: "", highlights: [] }] })} />
         </div>
       ) : null}
 
       {tab === "education" ? (
         <div className="stack">
-          {draft.education.length === 0 ? <p className="fine">No education yet.</p> : null}
+          {draft.education.length === 0 ? <p className="fine">{m.profile.noEducation}</p> : null}
           {draft.education.map((item, index) => (
             <EducationEditor
               key={index}
@@ -171,13 +173,13 @@ export function ProfileForm({
               onRemove={() => setDraft({ ...draft, education: draft.education.filter((_, rowIndex) => rowIndex !== index) })}
             />
           ))}
-          <AddButton label="Add education" onClick={() => setDraft({ ...draft, education: [...draft.education, { degree: "", institution: "", dates: "", details: "" }] })} />
+          <AddButton label={m.profile.addEducation} onClick={() => setDraft({ ...draft, education: [...draft.education, { degree: "", institution: "", dates: "", details: "" }] })} />
         </div>
       ) : null}
 
       {tab === "projects" ? (
         <div className="stack">
-          {draft.projects.length === 0 ? <p className="fine">No projects yet.</p> : null}
+          {draft.projects.length === 0 ? <p className="fine">{m.profile.noProjects}</p> : null}
           {draft.projects.map((item, index) => (
             <ProjectEditor
               key={index}
@@ -187,13 +189,13 @@ export function ProfileForm({
               onRemove={() => setDraft({ ...draft, projects: draft.projects.filter((_, rowIndex) => rowIndex !== index) })}
             />
           ))}
-          <AddButton label="Add project" onClick={() => setDraft({ ...draft, projects: [...draft.projects, { name: "", description: "", technologies: [] }] })} />
+          <AddButton label={m.profile.addProject} onClick={() => setDraft({ ...draft, projects: [...draft.projects, { name: "", description: "", technologies: [] }] })} />
         </div>
       ) : null}
 
       {tab === "certificates" ? (
         <div className="stack">
-          {draft.certifications.length === 0 ? <p className="fine">No certificates yet.</p> : null}
+          {draft.certifications.length === 0 ? <p className="fine">{m.profile.noCertificates}</p> : null}
           {draft.certifications.map((item, index) => (
             <CertificationEditor
               key={index}
@@ -203,13 +205,13 @@ export function ProfileForm({
               onRemove={() => setDraft({ ...draft, certifications: draft.certifications.filter((_, rowIndex) => rowIndex !== index) })}
             />
           ))}
-          <AddButton label="Add certificate" onClick={() => setDraft({ ...draft, certifications: [...draft.certifications, { name: "", issuer: "", date: "" }] })} />
+          <AddButton label={m.profile.addCertificate} onClick={() => setDraft({ ...draft, certifications: [...draft.certifications, { name: "", issuer: "", date: "" }] })} />
         </div>
       ) : null}
 
       <div className={next ? "form-actions" : undefined}>
         <button className={next ? "btn ghost" : "btn primary wide"} type="submit">
-          <Save size={16} /> Save profile
+          <Save size={16} /> {m.profile.save}
         </button>
         {next}
       </div>
@@ -238,10 +240,11 @@ function EntryList({
   values: string[];
   onChange: (values: string[]) => void;
 }) {
+  const { m } = usePreferences();
   return (
     <div className="entry-list">
       <span>{label}</span>
-      {values.length === 0 ? <p className="fine">None yet.</p> : null}
+      {values.length === 0 ? <p className="fine">{m.profile.none}</p> : null}
       {values.map((value, index) => (
         <div className="entry-line" key={index}>
           <input
@@ -288,59 +291,64 @@ function Entry({ index, onRemove, children }: { index: number; onRemove: () => v
 }
 
 function Remove({ onClick }: { onClick: () => void }) {
+  const { m } = usePreferences();
   return (
-    <button className="btn tiny ghost" type="button" onClick={onClick} aria-label="Remove">
+    <button className="btn tiny ghost" type="button" onClick={onClick} aria-label={m.profile.remove}>
       <Trash2 size={14} />
     </button>
   );
 }
 
 function ExperienceEditor({ index, item, onChange, onRemove }: { index: number; item: ExperienceItem; onChange: (item: ExperienceItem) => void; onRemove: () => void }) {
+  const { m } = usePreferences();
   return (
     <Entry index={index} onRemove={onRemove}>
       <div className="entry-grid">
-        <Field label="Title" value={item.title} onChange={(title) => onChange({ ...item, title })} />
-        <Field label="Company" value={item.company} onChange={(company) => onChange({ ...item, company })} />
+        <Field label={m.profile.title} value={item.title} onChange={(title) => onChange({ ...item, title })} />
+        <Field label={m.profile.company} value={item.company} onChange={(company) => onChange({ ...item, company })} />
       </div>
       <div className="entry-grid">
-        <Field label="Start" value={item.start} onChange={(start) => onChange({ ...item, start })} />
-        <Field label="End" value={item.end} onChange={(end) => onChange({ ...item, end })} />
+        <Field label={m.profile.start} value={item.start} onChange={(start) => onChange({ ...item, start })} />
+        <Field label={m.profile.end} value={item.end} onChange={(end) => onChange({ ...item, end })} />
       </div>
-      <Area label="Highlights" hint="One highlight per line." rows={3} value={item.highlights.join("\n")} onChange={(value) => onChange({ ...item, highlights: value.split("\n") })} />
+      <Area label={m.profile.highlights} hint={m.profile.highlightsHint} rows={3} value={item.highlights.join("\n")} onChange={(value) => onChange({ ...item, highlights: value.split("\n") })} />
     </Entry>
   );
 }
 
 function EducationEditor({ index, item, onChange, onRemove }: { index: number; item: EducationItem; onChange: (item: EducationItem) => void; onRemove: () => void }) {
+  const { m } = usePreferences();
   return (
     <Entry index={index} onRemove={onRemove}>
       <div className="entry-grid degrees">
-        <Field label="Degree" value={item.degree} onChange={(degree) => onChange({ ...item, degree })} />
-        <Field label="Dates" value={item.dates} onChange={(dates) => onChange({ ...item, dates })} />
+        <Field label={m.profile.degree} value={item.degree} onChange={(degree) => onChange({ ...item, degree })} />
+        <Field label={m.profile.dates} value={item.dates} onChange={(dates) => onChange({ ...item, dates })} />
       </div>
-      <Field label="Institution" value={item.institution} onChange={(institution) => onChange({ ...item, institution })} />
-      <Field label="Details" value={item.details} onChange={(details) => onChange({ ...item, details })} />
+      <Field label={m.profile.institution} value={item.institution} onChange={(institution) => onChange({ ...item, institution })} />
+      <Field label={m.profile.details} value={item.details} onChange={(details) => onChange({ ...item, details })} />
     </Entry>
   );
 }
 
 function ProjectEditor({ index, item, onChange, onRemove }: { index: number; item: ProjectItem; onChange: (item: ProjectItem) => void; onRemove: () => void }) {
+  const { m } = usePreferences();
   return (
     <Entry index={index} onRemove={onRemove}>
-      <Field label="Name" value={item.name} onChange={(name) => onChange({ ...item, name })} />
-      <Area label="Description" rows={3} value={item.description} onChange={(description) => onChange({ ...item, description })} />
-      <Area label="Technologies" hint="Comma or one per line." rows={2} value={item.technologies.join("\n")} onChange={(value) => onChange({ ...item, technologies: value.split(/[,|\n]+/) })} />
+      <Field label={m.profile.projectName} value={item.name} onChange={(name) => onChange({ ...item, name })} />
+      <Area label={m.profile.description} rows={3} value={item.description} onChange={(description) => onChange({ ...item, description })} />
+      <Area label={m.profile.technologies} hint={m.profile.techHint} rows={2} value={item.technologies.join("\n")} onChange={(value) => onChange({ ...item, technologies: value.split(/[,|\n]+/) })} />
     </Entry>
   );
 }
 
 function CertificationEditor({ index, item, onChange, onRemove }: { index: number; item: CertificationItem; onChange: (item: CertificationItem) => void; onRemove: () => void }) {
+  const { m } = usePreferences();
   return (
     <Entry index={index} onRemove={onRemove}>
       <div className="entry-grid certs">
-        <Field label="Name" value={item.name} onChange={(name) => onChange({ ...item, name })} />
-        <Field label="Issuer" value={item.issuer} onChange={(issuer) => onChange({ ...item, issuer })} />
-        <Field label="Date" value={item.date} onChange={(date) => onChange({ ...item, date })} />
+        <Field label={m.profile.name} value={item.name} onChange={(name) => onChange({ ...item, name })} />
+        <Field label={m.profile.issuer} value={item.issuer} onChange={(issuer) => onChange({ ...item, issuer })} />
+        <Field label={m.profile.date} value={item.date} onChange={(date) => onChange({ ...item, date })} />
       </div>
     </Entry>
   );
