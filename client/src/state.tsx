@@ -39,25 +39,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    let timer = 0;
     const load = async () => {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        try {
-          const status = await apiStatus();
-          if (!cancelled) {
-            setConfigured(status.configured ? "ready" : "missing");
-            setAllowBuiltin(status.allowBuiltin);
-            setBuiltinModel(status.model);
-          }
-          return;
-        } catch {
-          await new Promise((resolve) => window.setTimeout(resolve, 400));
-        }
+      try {
+        const status = await apiStatus();
+        if (cancelled) return;
+        setConfigured(status.configured ? "ready" : "missing");
+        setAllowBuiltin(status.allowBuiltin);
+        setBuiltinModel(status.model);
+      } catch {
+        if (cancelled) return;
+        setConfigured("offline");
+        timer = window.setTimeout(() => void load(), 3000);
       }
-      if (!cancelled) setConfigured("offline");
     };
     void load();
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 

@@ -18,6 +18,7 @@ const en = {
     notWorking: "Key not working",
     checking: "Checking key",
     notChecked: "Not checked",
+    notConnected: "Not connected",
   },
   keySetup: {
     title: "Add your API key",
@@ -337,6 +338,7 @@ const si: Messages = {
     notWorking: "යතුර ක්‍රියා නොකරයි",
     checking: "යතුර පරීක්ෂා වෙමින්",
     notChecked: "පරීක්ෂා කළ නොහැක",
+    notConnected: "සම්බන්ධ වී නැත",
   },
   keySetup: {
     title: "ඔබේ API යතුර එක් කරන්න",
@@ -652,6 +654,7 @@ const ta: Messages = {
     notWorking: "சாவி செயல்படவில்லை",
     checking: "சாவி சரிபார்க்கப்படுகிறது",
     notChecked: "சரிபார்க்க முடியவில்லை",
+    notConnected: "இணைக்கப்படவில்லை",
   },
   keySetup: {
     title: "உங்கள் API சாவியைச் சேருங்கள்",

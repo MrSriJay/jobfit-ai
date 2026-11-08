@@ -94,12 +94,15 @@ function tagClass(mark: KeyMark): string {
 
 function SiteFoot() {
   const openAbout = useOpenAbout();
-  const { m } = usePreferences();
+  const { allowBuiltin } = useStore();
+  const { prefs, m } = usePreferences();
   const marks = useKeyMarks();
+  const usingOwn = !allowBuiltin || prefs.useOwnKey;
+  const unreachable = usingOwn ? m.footer.notChecked : m.footer.notConnected;
   const configuredLabel =
-    marks.configured === "yes" ? m.footer.configured : marks.configured === "no" ? m.footer.notConfigured : marks.configured === "checking" ? m.footer.checking : m.footer.notChecked;
+    marks.configured === "yes" ? m.footer.configured : marks.configured === "no" ? m.footer.notConfigured : marks.configured === "checking" ? m.footer.checking : unreachable;
   const workingLabel =
-    marks.working === "yes" ? m.footer.working : marks.working === "no" ? m.footer.notWorking : marks.working === "checking" ? m.footer.checking : m.footer.notChecked;
+    marks.working === "yes" ? m.footer.working : marks.working === "no" ? (usingOwn ? m.footer.notWorking : m.footer.notConnected) : marks.working === "checking" ? m.footer.checking : unreachable;
   return (
     <footer className="site-foot">
       <div className="foot-tags" role="status">
