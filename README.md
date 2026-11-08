@@ -6,7 +6,11 @@ There are no accounts and no application database. The profile, job draft, and r
 
 ## Try it out
 
-[![Try it out](https://img.shields.io/badge/Try%20it%20out-f5c400?style=for-the-badge&labelColor=1a1403)](https://client-seven-lyart-30.vercel.app/)
+<p align="center">
+  <a href="https://client-seven-lyart-30.vercel.app/">
+    <img src="docs/try-it-out.png" width="640" alt="Try it out" />
+  </a>
+</p>
 
 ## Motivation
 

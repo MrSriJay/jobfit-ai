@@ -124,9 +124,8 @@ export function SettingsMenu({ trigger }: { trigger: ReactNode }) {
                     className="btn danger"
                     type="button"
                     onClick={() => {
-                      clearAll(m.menu.cleared);
                       setConfirming(false);
-                      navigate("/", { replace: true });
+                      clearAll();
                     }}
                   >
                     <Trash2 size={16} /> {m.menu.confirm}

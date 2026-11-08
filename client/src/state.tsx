@@ -1,9 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { apiStatus } from "./api";
-import { emptySnapshot, loadSnapshot, MAX_HISTORY, saveSnapshot, type Snapshot } from "./storage";
-import { clearOwnKey } from "./preferences";
-import { resetTips } from "./tips";
+import { loadSnapshot, MAX_HISTORY, saveSnapshot, type Snapshot } from "./storage";
 import type { AnalysisRecord, CandidateProfile, JobPosting } from "./types";
 
 interface Store {
@@ -96,13 +94,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           currentAnalysisId: record.id,
         })),
       selectAnalysis: (id) => setSnapshot((current) => ({ ...current, currentAnalysisId: id })),
-      clearAll: (message = "Local data cleared") => {
-        resetTips();
-        clearOwnKey();
-        window.dispatchEvent(new Event("jobfit-key-warn"));
-        setSnapshot(emptySnapshot());
-        setProfileNonce((value) => value + 1);
-        setNotice(message);
+      clearAll: () => {
+        void clearSiteStorage().finally(() => {
+          window.location.replace("/");
+        });
       },
       clearCv: (message = "CV and profile removed") => {
         setSnapshot((current) => ({ ...current, profile: null, cvFilename: "" }));
@@ -120,6 +115,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       {notice ? <div className="toast">{notice}</div> : null}
     </StoreContext.Provider>
   );
+}
+
+async function clearSiteStorage(): Promise<void> {
+  localStorage.clear();
+  sessionStorage.clear();
+  if ("caches" in window) {
+    const names = await caches.keys();
+    await Promise.all(names.map((name) => caches.delete(name)));
+  }
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  }
 }
 
 export function useStore(): Store {
