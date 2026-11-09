@@ -588,28 +588,80 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
 .history-strip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-strip strong { font-size: 0.9rem; }
 .history-strip span { color: var(--muted); font-size: 0.78rem; }
-.draft-email {
+.report-side {
   position: sticky;
   top: 88px;
-  height: calc(100vh - 290px);
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  max-height: calc(100vh - 108px);
   margin-top: 8px;
+  overflow: auto;
+}
+.draft-email {
+  position: static;
+  height: auto;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 .draft-email h2 { margin: 0; }
+.draft-kinds { display: grid; gap: 6px; flex: none; }
+.draft-kinds button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.84rem;
+}
+.draft-kinds button.active {
+  color: var(--yellow-ink);
+  background: var(--yellow);
+  border-color: transparent;
+}
+.draft-kinds button:disabled { opacity: 0.7; }
 .draft-email .banner { margin: 0; }
 .draft-email .draft-body {
-  flex: 1;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  flex: none;
+  grid-template-rows: auto auto;
 }
 .draft-email textarea {
-  height: 100%;
-  min-height: 0;
-  resize: none;
+  height: 220px;
+  min-height: 160px;
+  resize: vertical;
   line-height: 1.55;
+}
+.answer-card { display: grid; gap: 12px; }
+.answer-card h2, .answer-card h3, .answer-card .fine, .answer-card .banner { margin: 0; }
+.answer-card textarea { min-height: 120px; line-height: 1.55; }
+.answer-card .btn.wide { width: 100%; }
+.saved-answers { display: grid; gap: 8px; }
+.saved-answer {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.saved-answer strong { font-size: 0.86rem; }
+.saved-answer span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .draft-actions {
   display: grid;
@@ -657,9 +709,28 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
   border-radius: inherit;
   background: var(--surface);
 }
-.ring strong, .ring span { position: relative; }
-.ring strong { font-family: Outfit, sans-serif; font-size: 2.4rem; line-height: 1; }
-.ring span { color: var(--muted); font-size: 0.75rem; }
+.ring strong {
+  position: relative;
+  z-index: 1;
+  font-family: Outfit, sans-serif;
+  font-size: 2.7rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  transform: translateY(-6px);
+}
+.ring span {
+  position: absolute;
+  z-index: 1;
+  left: 22px;
+  right: 22px;
+  bottom: 30px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
 
 .bars { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 12px; }
 .bars li div:first-child { display: flex; justify-content: space-between; font-size: 0.92rem; }
@@ -1002,7 +1073,7 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
 
 @media (max-width: 1100px) {
   .analysis-page { grid-template-columns: 1fr; }
-  .draft-email { position: static; height: auto; overflow: visible; }
+  .report-side { position: static; max-height: none; overflow: visible; }
   .draft-email textarea { height: 320px; }
 }
 

@@ -2,13 +2,15 @@ import { ArrowLeft, Briefcase, Copy, Download, ExternalLink, LoaderCircle, Mail,
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { regenerateEmail } from "../api";
+import { answerQuestion, regenerateDraft } from "../api";
 import { FlowTip } from "../components/Tooltip";
 import { buildReportPdf, downloadPdf, safeFilename } from "../pdf";
 import { useStore } from "../state";
 import { dismissTip } from "../tips";
 import { bandLabel, usePreferences } from "../preferences";
-import { AREA_ORDER, CRITERIA, type AnalysisRecord, type Criterion } from "../types";
+import { AREA_ORDER, CRITERIA, readDraft, writeDraft, type AnalysisRecord, type Criterion, type DraftKind } from "../types";
+
+const DRAFT_KINDS: DraftKind[] = ["email", "hiring", "cover"];
 
 const MAILTO_LIMIT = 1800;
 const SECTION_IDS = ["overview", "scores", "skills", "advice"] as const;
@@ -90,10 +92,15 @@ function Report({
   onChange: (record: AnalysisRecord) => void;
   notify: (message: string) => void;
 }) {
+  const [kind, setKind] = useState<DraftKind>("email");
   const [subject, setSubject] = useState(record.emailSubject);
   const [body, setBody] = useState(record.emailBody);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(record.emailError);
+  const [question, setQuestion] = useState(record.applicationAnswers?.[0]?.question ?? "");
+  const [answer, setAnswer] = useState(record.applicationAnswers?.[0]?.answer ?? "");
+  const [answerBusy, setAnswerBusy] = useState(false);
+  const [answerError, setAnswerError] = useState("");
   const [score, setScore] = useState(0);
   const { m, fill } = usePreferences();
   const [tab, setTab] = useState<SectionId>("overview");
@@ -101,6 +108,13 @@ function Report({
   const heading = company ? `${record.job.title} at ${company}` : record.job.title;
   const mail = mailto(subject, body);
   const posting = /^https?:\/\//i.test(record.job.url.trim()) ? record.job.url.trim() : "";
+
+  useEffect(() => {
+    const first = record.applicationAnswers?.[0];
+    setQuestion(first?.question ?? "");
+    setAnswer(first?.answer ?? "");
+    setAnswerError("");
+  }, [record.id]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setScore(record.score));
@@ -129,27 +143,40 @@ function Report({
   };
 
   useEffect(() => {
-    setSubject(record.emailSubject);
-    setBody(record.emailBody);
-    setError(record.emailError);
-  }, [record.id, record.emailSubject, record.emailBody, record.emailError]);
+    const fields = readDraft(record, kind);
+    setSubject(fields.subject);
+    setBody(fields.body);
+    setError(!fields.subject && !fields.body ? record.emailError : "");
+  }, [record, kind]);
 
-  const persistEmail = (nextSubject: string, nextBody: string) => {
-    if (nextSubject === record.emailSubject && nextBody === record.emailBody) return;
-    onChange({ ...record, emailSubject: nextSubject, emailBody: nextBody, emailError: "" });
+  const persistDraft = () => {
+    const saved = writeDraft(record, kind, subject, body);
+    if (saved !== record) onChange(saved);
   };
 
-  const copyEmail = async () => {
+  const switchKind = (next: DraftKind) => {
+    if (next === kind || busy) return;
+    const saved = writeDraft(record, kind, subject, body);
+    if (saved !== record) onChange(saved);
+    const fields = readDraft(saved, next);
+    setKind(next);
+    setSubject(fields.subject);
+    setBody(fields.body);
+    setError(!fields.subject && !fields.body ? saved.emailError : "");
+  };
+
+  const copyDraft = async () => {
+    const label = kind === "cover" ? m.analysis.subjectLabel.cover : m.analysis.subject;
     try {
-      await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
-      notify(m.analysis.copied);
+      await navigator.clipboard.writeText(`${label}: ${subject}\n\n${body}`);
+      notify(m.analysis.copied[kind]);
     } catch {
-      setError("The browser blocked clipboard access. Select the email text and copy it manually.");
+      setError(m.analysis.copyFailed);
     }
   };
 
   const download = async () => {
-    const bytes = await buildReportPdf({ ...record, emailSubject: subject, emailBody: body });
+    const bytes = await buildReportPdf(writeDraft(record, kind, subject, body));
     downloadPdf(bytes, `${safeFilename(`jobfit-${record.job.company}-${record.job.title}`)}.pdf`);
   };
 
@@ -157,15 +184,54 @@ function Report({
     setBusy(true);
     setError("");
     try {
-      const email = await regenerateEmail(record);
-      setSubject(email.subject);
-      setBody(email.body);
-      onChange({ ...record, emailSubject: email.subject, emailBody: email.body, emailError: "" });
-      notify(m.analysis.updated);
+      const draft = await regenerateDraft(record, kind);
+      setSubject(draft.subject);
+      setBody(draft.body);
+      onChange(writeDraft(record, kind, draft.subject, draft.body));
+      notify(m.analysis.updated[kind]);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : m.analysis.emailFailed);
+      setError(caught instanceof Error ? caught.message : m.analysis.failed[kind]);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const rememberAnswer = (nextQuestion: string, nextAnswer: string) => {
+    const trimmed = nextQuestion.trim();
+    const rest = (record.applicationAnswers ?? []).filter((item) => item.question.trim() !== trimmed);
+    onChange({
+      ...record,
+      applicationAnswers: [{ question: trimmed, answer: nextAnswer }, ...rest].slice(0, 6),
+    });
+  };
+
+  const generateAnswer = async () => {
+    const trimmed = question.trim();
+    if (trimmed.length < 8) {
+      setAnswerError(m.analysis.answerShort);
+      return;
+    }
+    setAnswerBusy(true);
+    setAnswerError("");
+    try {
+      const text = await answerQuestion(record, trimmed);
+      setQuestion(trimmed);
+      setAnswer(text);
+      rememberAnswer(trimmed, text);
+      notify(m.analysis.answerReady);
+    } catch (caught) {
+      setAnswerError(caught instanceof Error ? caught.message : m.analysis.answerFailed);
+    } finally {
+      setAnswerBusy(false);
+    }
+  };
+
+  const copyAnswer = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      notify(m.analysis.answerCopied);
+    } catch {
+      setAnswerError(m.analysis.copyFailed);
     }
   };
 
@@ -337,47 +403,123 @@ function Report({
       </div>
       </div>
 
+      <div className="report-side">
       <aside className="card draft-email" aria-label={m.analysis.draft}>
         <FlowTip id="email" label={m.analysis.tipEmail}>
           <h2>{m.analysis.draft}</h2>
         </FlowTip>
+        <div className="draft-kinds" role="tablist" aria-label={m.analysis.draft}>
+          {DRAFT_KINDS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="tab"
+              aria-selected={kind === item}
+              className={kind === item ? "active" : ""}
+              disabled={busy}
+              onClick={() => switchKind(item)}
+            >
+              {m.analysis.kinds[item]}
+            </button>
+          ))}
+        </div>
         {error ? (
           <div className="banner danger">
             <strong>{m.analysis.draftFail}</strong>
             <p>{error}</p>
           </div>
         ) : null}
+        {!subject.trim() && !body.trim() && !error ? <p className="fine">{m.analysis.draftHint}</p> : null}
         <label className="field">
-          <span>{m.analysis.subject}</span>
+          <span>{m.analysis.subjectLabel[kind]}</span>
           <input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            onBlur={() => persistEmail(subject, body)}
+            onBlur={persistDraft}
           />
         </label>
         <label className="field draft-body">
-          <span>{m.analysis.email}</span>
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} onBlur={() => persistEmail(subject, body)} />
+          <span>{m.analysis.bodyLabel[kind]}</span>
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} onBlur={persistDraft} />
         </label>
         <div className="draft-actions">
-          <button className="btn ghost" type="button" onClick={() => void copyEmail()}>
+          <button className="btn ghost" type="button" onClick={() => void copyDraft()}>
             <Copy size={16} /> {m.analysis.copy}
           </button>
           <button className="btn ghost" type="button" disabled={busy} onClick={() => void regenerate()}>
-            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} {m.analysis.regenerate}
+            {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} {subject.trim() || body.trim() ? m.analysis.regenerate : m.analysis.generate}
           </button>
           <button className="btn ghost wide" type="button" onClick={() => void download()}>
             <Download size={16} /> {m.analysis.download}
           </button>
-          {mail ? (
-            <a className="btn primary wide" href={mail}>
-              <Mail size={16} /> {m.analysis.openMail}
-            </a>
-          ) : (
-            <p className="fine wide">{m.analysis.tooLong}</p>
-          )}
+          {subject.trim() || body.trim() ? (
+            mail ? (
+              <a className="btn primary wide" href={mail}>
+                <Mail size={16} /> {m.analysis.openMail}
+              </a>
+            ) : (
+              <p className="fine wide">{m.analysis.tooLong}</p>
+            )
+          ) : null}
         </div>
       </aside>
+      <aside className="card answer-card" aria-label={m.analysis.answers}>
+        <h2>{m.analysis.answers}</h2>
+        <p className="fine">{m.analysis.answersHint}</p>
+        {answerError ? (
+          <div className="banner danger">
+            <strong>{m.analysis.answerFailed}</strong>
+            <p>{answerError}</p>
+          </div>
+        ) : null}
+        <label className="field">
+          <span>{m.analysis.question}</span>
+          <textarea
+            value={question}
+            placeholder={m.analysis.questionPlaceholder}
+            onChange={(event) => setQuestion(event.target.value)}
+          />
+        </label>
+        <button className="btn primary wide" type="button" disabled={answerBusy} onClick={() => void generateAnswer()}>
+          {answerBusy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} {m.analysis.generateAnswer}
+        </button>
+        <label className="field">
+          <span>{m.analysis.answer}</span>
+          <textarea
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+            onBlur={() => {
+              if (question.trim() && answer.trim()) rememberAnswer(question, answer);
+            }}
+          />
+        </label>
+        <button className="btn ghost wide" type="button" disabled={!answer.trim()} onClick={() => void copyAnswer(answer)}>
+          <Copy size={16} /> {m.analysis.copy}
+        </button>
+        {(record.applicationAnswers ?? []).filter((item) => item.question.trim() !== question.trim()).length > 0 ? (
+          <div className="saved-answers">
+            <h3>{m.analysis.earlier}</h3>
+            {(record.applicationAnswers ?? [])
+              .filter((item) => item.question.trim() !== question.trim())
+              .map((item) => (
+                <button
+                  key={item.question}
+                  className="saved-answer"
+                  type="button"
+                  onClick={() => {
+                    setQuestion(item.question);
+                    setAnswer(item.answer);
+                    setAnswerError("");
+                  }}
+                >
+                  <strong>{item.question}</strong>
+                  <span>{item.answer}</span>
+                </button>
+              ))}
+          </div>
+        ) : null}
+      </aside>
+      </div>
     </section>
   );
 }

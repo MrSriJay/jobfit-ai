@@ -101,10 +101,24 @@ export async function buildReportPdf(record: AnalysisRecord): Promise<Uint8Array
     write(AREA_LABELS[area], { face: bold, gap: 1 });
     for (const item of advice) write(`• ${item.advice}`);
   }
-  if (record.emailSubject || record.emailBody) {
-    write("Application email", { size: 13, face: bold, gap: 2 });
-    write(`Subject: ${record.emailSubject}`, { face: bold, gap: 2 });
-    write(record.emailBody);
+  const drafts = [
+    ["Application email", record.emailSubject, record.emailBody],
+    ["Message to hiring manager", record.hiringSubject, record.hiringBody],
+    ["Cover letter", record.coverSubject, record.coverBody],
+  ] as const;
+  for (const [title, subject, body] of drafts) {
+    if (!subject && !body) continue;
+    write(title, { size: 13, face: bold, gap: 2 });
+    if (subject) write(`Subject: ${subject}`, { face: bold, gap: 2 });
+    if (body) write(body);
+  }
+  const answers = record.applicationAnswers ?? [];
+  if (answers.some((item) => item.question || item.answer)) {
+    write("Application answers", { size: 13, face: bold, gap: 2 });
+    for (const item of answers) {
+      if (item.question) write(item.question, { face: bold, gap: 1 });
+      if (item.answer) write(item.answer);
+    }
   }
 
   pdf.setTitle("JobFit AI match report");

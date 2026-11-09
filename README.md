@@ -1,6 +1,6 @@
 # JobFit AI
 
-JobFit AI compares one CV with a job description. It shows a match score, the skill gaps, and a draft application email. Upload a resume once, or type the profile yourself, then check other roles without uploading the CV again.
+JobFit AI compares one CV with a job description. It shows a match score, the skill gaps, and three application drafts: an email, a message to the hiring manager, and a cover letter. Paste a question from an application form and JobFit writes the answer from the same profile and job. Upload a resume once, or type the profile yourself, then check other roles without uploading the CV again.
 
 There are no accounts and no application database. The profile, job draft, and recent reports stay in this browser.
 
@@ -14,9 +14,9 @@ There are no accounts and no application database. The profile, job draft, and r
 
 ## Motivation
 
-Job opportunities show up often on platforms such as LinkedIn. Working out whether a role matches your skills and experience, reading the requirements, and writing a tailored application email is often slow and difficult.
+Job opportunities show up often on platforms such as LinkedIn. Working out whether a role matches your skills and experience, reading the requirements, and writing a tailored application email, a note to the hiring manager, and a cover letter is often slow and difficult.
 
-JobFit is built to simplify that process. It compares a CV with a job description, shows how suitable the opportunity is, highlights skill gaps, and helps prepare a professional, personalised application email. The aim is to make the job search easier, faster, and more efficient.
+JobFit is built to simplify that process. It compares a CV with a job description, shows how suitable the opportunity is, highlights skill gaps, and prepares those three drafts from the saved profile and the job. The aim is to make the job search easier, faster, and more efficient.
 
 ![Welcome](docs/screenshots/welcome.png)
 
@@ -38,16 +38,17 @@ The job and report screens use a sample profile so the layout is visible without
 2. Review the extracted profile and keep it for later jobs.
 3. Paste a job title and description.
 4. Read a 0–100 match score, matched skills, gaps, and recommendations.
-5. Edit, copy, regenerate, or open a draft application email.
-6. Download a PDF report.
-7. Choose English, Sinhala, or Tamil. English is the default.
-8. Use the developer key, or save your own OpenAI API key and model in Settings.
+5. Switch between a draft email, a message to the hiring manager, and a cover letter. Edit, copy, regenerate, or open the selected draft.
+6. Paste a question from an application form. JobFit writes the answer from the saved profile and that job.
+7. Download a PDF report. It includes each draft that has text, and any application answers.
+8. Choose English, Sinhala, or Tamil. English is the default.
+9. Use the developer key, or save your own OpenAI API key and model in Settings.
 
-Saved analyses stay in the settings menu and on the Analysis page. Clearing local data removes the profile, drafts, reports, and your own API key from this browser. The language choice stays.
+Saved analyses stay in the settings menu and on the Analysis page. Clearing local data removes this site’s browser storage and cache, including the profile, drafts, reports, language, theme, and your own API key. The walkthrough tips show again from the home page.
 
 ## Architecture
 
-The browser never receives the developer API key. A CV file is read on the server. OpenAI is called only for extraction, analysis, email regeneration, and the key check. Those requests are sent with `store` set to false.
+The browser never receives the developer API key. A CV file is read on the server. OpenAI is called only for extraction, analysis, regenerating a draft, answering an application question, and the key check. Those requests are sent with `store` set to false.
 
 ```mermaid
 flowchart LR
@@ -65,13 +66,13 @@ flowchart LR
   end
   Model["OpenAI"]
   UI -->|"/api"| API
-  API -->|"profile, match, email"| Model
+  API -->|"profile, match, drafts"| Model
 ```
 
 ```text
 client/     React, TypeScript, Vite
 server/     Express, TypeScript
-prompts/    Instructions for extraction, matching, and the email
+prompts/    Instructions for extraction, matching, drafts, and application answers
 ```
 
 | Piece | Role |
@@ -82,8 +83,9 @@ prompts/    Instructions for extraction, matching, and the email
 | `jobfit-theme-v1` | Dark or light theme |
 | `POST /api/parse` | Reads a PDF or DOCX into text. Does not call OpenAI |
 | `POST /api/extract` | Turns CV text into a profile |
-| `POST /api/analyze` | Compares the profile with a job, then drafts an email |
-| `POST /api/email` | Regenerates the email for a saved analysis |
+| `POST /api/analyze` | Compares the profile with a job, then drafts the email, hiring-manager message, and cover letter |
+| `POST /api/email` | Regenerates the selected draft for a saved analysis |
+| `POST /api/answer` | Answers one pasted application question from the profile and the job |
 | `GET /api/status` | Reports whether the developer key is present, the model name, and whether Built-in is offered |
 | `POST /api/key-check` | Asks OpenAI whether the active key and model respond |
 | `server/src/score.ts` | Turns the five category scores into the 0–100 result |
@@ -104,7 +106,7 @@ The footer shows two tags: whether a key is configured, and whether that key and
 
 ### Languages
 
-English, Sinhala, and Tamil are available in Settings. The interface, the match report, and the draft email follow that choice. Facts taken from the CV stay as written. The downloaded PDF uses a Latin font, so Sinhala and Tamil may not appear in that file.
+English, Sinhala, and Tamil are available in Settings. The interface, the match report, the three drafts, and application answers follow that choice. Facts taken from the CV stay as written. The downloaded PDF uses a Latin font, so Sinhala and Tamil may not appear in that file.
 
 ## Scoring
 
@@ -155,7 +157,7 @@ A log that runs `tsc -p tsconfig.json --noEmit && vite build` means the Vercel r
 
 The CV, profile, job drafts, and match reports stay in this browser. JobFit keeps no account and no application database, so that information remains on your device and out of any public or shared store. Clearing this browser’s site data removes it.
 
-A CV is sent to OpenAI only when you extract a profile. A saved profile and a job description are sent only when you analyze a match or regenerate an email. A key check sends the active key and model so the footer can show whether they respond. Those requests are made with storage turned off.
+A CV is sent to OpenAI only when you extract a profile. A saved profile and a job description are sent only when you analyze a match, regenerate a draft, or answer an application question. A key check sends the active key and model so the footer can show whether they respond. Those requests are made with storage turned off.
 
 The built-in API key remains on the server and is not returned to the browser. A key you enter in Settings is stored only on this device, in this browser. It is not placed in a public or shared store.
 

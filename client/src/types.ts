@@ -76,6 +76,33 @@ export interface AnalysisRecord extends MatchResult {
   emailSubject: string;
   emailBody: string;
   emailError: string;
+  hiringSubject: string;
+  hiringBody: string;
+  coverSubject: string;
+  coverBody: string;
+  applicationAnswers: ApplicationAnswer[];
+}
+
+export interface ApplicationAnswer {
+  question: string;
+  answer: string;
+}
+
+export type DraftKind = "email" | "hiring" | "cover";
+
+export function readDraft(record: AnalysisRecord, kind: DraftKind): { subject: string; body: string } {
+  if (kind === "hiring") return { subject: record.hiringSubject || "", body: record.hiringBody || "" };
+  if (kind === "cover") return { subject: record.coverSubject || "", body: record.coverBody || "" };
+  return { subject: record.emailSubject || "", body: record.emailBody || "" };
+}
+
+export function writeDraft(record: AnalysisRecord, kind: DraftKind, subject: string, body: string): AnalysisRecord {
+  const current = readDraft(record, kind);
+  if (current.subject === subject && current.body === body) return record;
+  const emailError = subject.trim() || body.trim() ? "" : record.emailError;
+  if (kind === "hiring") return { ...record, hiringSubject: subject, hiringBody: body, emailError };
+  if (kind === "cover") return { ...record, coverSubject: subject, coverBody: body, emailError };
+  return { ...record, emailSubject: subject, emailBody: body, emailError };
 }
 
 export const CRITERIA: { key: Criterion; label: string; weight: string }[] = [

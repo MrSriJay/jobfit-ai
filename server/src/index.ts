@@ -4,7 +4,7 @@ import multer from "multer";
 import { ALLOW_BUILTIN, MODEL, PORT } from "./config.js";
 import { parseDocument } from "./documents.js";
 import { AppError, publicErrorText } from "./errors.js";
-import { apiKeyConfigured, checkApiKey, createAnalysis, extractProfile, readCallOptions, regenerateEmail } from "./openai.js";
+import { answerApplicationQuestion, apiKeyConfigured, checkApiKey, createAnalysis, extractProfile, readCallOptions, regenerateDraft } from "./openai.js";
 import { candidateProfileSchema, jobPostingSchema, matchResultSchema } from "./schemas.js";
 
 const app = express();
@@ -86,7 +86,9 @@ app.post("/api/email", async (req, res, next) => {
     if (!profile.success || !job.success || !match.success || !Number.isFinite(score)) {
       throw new AppError("The saved analysis could not be used to draft an email.");
     }
-    const email = await regenerateEmail({
+    const requested = req.body?.kind;
+    const kind = requested === "hiring" || requested === "cover" || requested === "email" ? requested : "email";
+    const draft = await regenerateDraft({
       id: "",
       createdAt: "",
       profile: profile.data,
@@ -103,8 +105,28 @@ app.post("/api/email", async (req, res, next) => {
       emailSubject: "",
       emailBody: "",
       emailError: "",
-    }, readCallOptions(req.body));
-    res.json(email);
+      hiringSubject: "",
+      hiringBody: "",
+      coverSubject: "",
+      coverBody: "",
+      applicationAnswers: [],
+    }, kind, readCallOptions(req.body));
+    res.json(draft);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/answer", async (req, res, next) => {
+  try {
+    const profile = candidateProfileSchema.safeParse(req.body?.profile);
+    const job = jobPostingSchema.safeParse(req.body?.job);
+    const question = typeof req.body?.question === "string" ? req.body.question : "";
+    if (!profile.success || !job.success) {
+      throw new AppError("The saved profile or job could not be used.");
+    }
+    const answer = await answerApplicationQuestion(profile.data, job.data, question, readCallOptions(req.body));
+    res.json({ answer });
   } catch (error) {
     next(error);
   }

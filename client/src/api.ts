@@ -1,5 +1,5 @@
 import { loadPreferences, requestOptions } from "./preferences";
-import type { AnalysisRecord, CandidateProfile, JobPosting, MatchResult } from "./types";
+import type { AnalysisRecord, CandidateProfile, DraftKind, JobPosting, MatchResult } from "./types";
 
 async function readError(response: Response): Promise<string> {
   const data = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -57,7 +57,7 @@ export async function analyzeJob(profile: CandidateProfile, job: JobPosting): Pr
   return data.record;
 }
 
-export async function regenerateEmail(record: AnalysisRecord): Promise<{ subject: string; body: string }> {
+export async function regenerateDraft(record: AnalysisRecord, kind: DraftKind): Promise<{ subject: string; body: string }> {
   const match: MatchResult = {
     summary: record.summary,
     categories: record.categories,
@@ -76,9 +76,26 @@ export async function regenerateEmail(record: AnalysisRecord): Promise<{ subject
       match,
       score: record.score,
       classification: record.classification,
+      kind,
       options: requestOptions(),
     }),
   });
   if (!response.ok) throw new Error(await readError(response));
   return response.json() as Promise<{ subject: string; body: string }>;
+}
+
+export async function answerQuestion(record: AnalysisRecord, question: string): Promise<string> {
+  const response = await fetch("/api/answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      profile: record.profile,
+      job: record.job,
+      question,
+      options: requestOptions(),
+    }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const data = (await response.json()) as { answer?: string };
+  return data.answer?.trim() ?? "";
 }

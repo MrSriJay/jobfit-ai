@@ -91,6 +91,23 @@ export const emailDraftSchema = z.object({
   body: z.string(),
 });
 
+export const applicationPackSchema = z.object({
+  email: emailDraftSchema,
+  hiringMessage: emailDraftSchema,
+  coverLetter: emailDraftSchema,
+});
+
+export type DraftKind = "email" | "hiring" | "cover";
+
+export const applicationAnswerSchema = z.object({
+  answer: z.string(),
+});
+
+export interface ApplicationAnswer {
+  question: string;
+  answer: string;
+}
+
 export type CandidateProfile = z.infer<typeof candidateProfileSchema>;
 export type JobPosting = z.infer<typeof jobPostingSchema>;
 export type CategoryAssessment = z.infer<typeof categorySchema>;
@@ -114,4 +131,9 @@ export interface AnalysisRecord {
   emailSubject: string;
   emailBody: string;
   emailError: string;
+  hiringSubject: string;
+  hiringBody: string;
+  coverSubject: string;
+  coverBody: string;
+  applicationAnswers: ApplicationAnswer[];
 }

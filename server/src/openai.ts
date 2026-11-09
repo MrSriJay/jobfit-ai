@@ -11,11 +11,14 @@ import { ALLOW_BUILTIN, MAX_CV_CHARS, MAX_JOB_CHARS, MODEL, REASONING_EFFORT, RO
 import { AppError, publicErrorText } from "./errors.js";
 import { classify, orderCategories, weightedScore } from "./score.js";
 import {
+  applicationAnswerSchema,
+  applicationPackSchema,
   candidateProfileSchema,
   emailDraftSchema,
   matchResultSchema,
   type AnalysisRecord,
   type CandidateProfile,
+  type DraftKind,
   type EmailDraft,
   type JobPosting,
   type MatchResult,
@@ -28,6 +31,7 @@ const promptFiles: Record<string, URL> = {
   "cv_extraction.txt": new URL("../../prompts/cv_extraction.txt", import.meta.url),
   "job_matching.txt": new URL("../../prompts/job_matching.txt", import.meta.url),
   "email_generation.txt": new URL("../../prompts/email_generation.txt", import.meta.url),
+  "application_answer.txt": new URL("../../prompts/application_answer.txt", import.meta.url),
 };
 
 function loadPrompt(filename: string): string {
@@ -131,6 +135,15 @@ function rememberProfile(hash: string, profile: CandidateProfile): void {
   }
 }
 
+function usesReasoningEffort(model: string): boolean {
+  return /^(o\d|gpt-5|gpt-6)/i.test(model.trim());
+}
+
+function rejectedReasoningEffort(error: unknown): boolean {
+  const text = error instanceof Error ? error.message.toLowerCase() : "";
+  return text.includes("reasoning.effort") && text.includes("not supported");
+}
+
 async function parseStructured<T>(
   instructions: string,
   userInput: string,
@@ -140,23 +153,31 @@ async function parseStructured<T>(
 ): Promise<T> {
   const chosen = credentials(options);
   const client = new OpenAI({ apiKey: chosen.apiKey, timeout: process.env.VERCEL === "1" ? 50_000 : 180_000 });
-  try {
-    const response = await client.responses.parse({
-      model: chosen.model,
-      instructions,
-      input: userInput,
-      text: { format: zodTextFormat(schema, name) },
-      reasoning: { effort: REASONING_EFFORT as "low" },
-      store: false,
-    });
-    if (!response.output_parsed) {
-      throw new AppError("The model did not return a usable result. Try again.", 502);
+  let withReasoning = usesReasoningEffort(chosen.model);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await client.responses.parse({
+        model: chosen.model,
+        instructions,
+        input: userInput,
+        text: { format: zodTextFormat(schema, name) },
+        ...(withReasoning ? { reasoning: { effort: REASONING_EFFORT as "low" } } : {}),
+        store: false,
+      });
+      if (!response.output_parsed) {
+        throw new AppError("The model did not return a usable result. Try again.", 502);
+      }
+      return response.output_parsed;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      if (withReasoning && rejectedReasoningEffort(error)) {
+        withReasoning = false;
+        continue;
+      }
+      throw new AppError(publicErrorText(error), 502);
     }
-    return response.output_parsed;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(publicErrorText(error), 502);
   }
+  throw new AppError("The model did not return a usable result. Try again.", 502);
 }
 
 export async function extractProfile(cvText: string, options?: CallOptions): Promise<{ profile: CandidateProfile; truncated: boolean; fromCache: boolean }> {
@@ -193,14 +214,26 @@ export async function assessMatch(profile: CandidateProfile, job: JobPosting, op
   return { match, truncated };
 }
 
-export async function generateEmail(
+const DRAFT_FIELD: Record<DraftKind, "email" | "hiringMessage" | "coverLetter"> = {
+  email: "email",
+  hiring: "hiringMessage",
+  cover: "coverLetter",
+};
+
+function draftInstructions(kind: DraftKind | "all", language: CallOptions["language"]): string {
+  const focus = kind === "all"
+    ? "Write all three documents: email, hiringMessage, and coverLetter."
+    : `Write only the ${DRAFT_FIELD[kind]}. Return its subject and body.`;
+  return `${withLanguage(loadPrompt("email_generation.txt"), language)}\n\n${focus}`;
+}
+
+function draftInput(
   profile: CandidateProfile,
   job: JobPosting,
   match: MatchResult,
   score: number,
   classification: string,
-  options?: CallOptions,
-): Promise<EmailDraft> {
+): string {
   const brief = {
     classification,
     score,
@@ -208,20 +241,14 @@ export async function generateEmail(
     strengths: match.strengths.map((item) => item.title),
     matchedSkills: match.matchedSkills.slice(0, 12),
   };
-  return parseStructured(
-    withLanguage(loadPrompt("email_generation.txt"), options?.language),
-    [
-      "CANDIDATE PROFILE:",
-      JSON.stringify(profile),
-      "JOB:",
-      JSON.stringify(job),
-      "ASSESSMENT BRIEF (do not mention the score in the email):",
-      JSON.stringify(brief),
-    ].join("\n\n"),
-    emailDraftSchema,
-    "email_draft",
-    options,
-  );
+  return [
+    "CANDIDATE PROFILE:",
+    JSON.stringify(profile),
+    "JOB:",
+    JSON.stringify(job),
+    "ASSESSMENT BRIEF (do not mention the score in the documents):",
+    JSON.stringify(brief),
+  ].join("\n\n");
 }
 
 function unique(items: string[]): string[] {
@@ -244,13 +271,28 @@ export async function createAnalysis(profile: CandidateProfile, job: JobPosting,
   const classification = classify(score);
   let emailSubject = "";
   let emailBody = "";
+  let hiringSubject = "";
+  let hiringBody = "";
+  let coverSubject = "";
+  let coverBody = "";
   let emailError = "";
+  const assessed = { ...match, categories };
   try {
-    const email = await generateEmail(profile, job, { ...match, categories }, score, classification, options);
-    emailSubject = email.subject.trim();
-    emailBody = email.body.trim();
+    const pack = await parseStructured(
+      draftInstructions("all", options?.language),
+      draftInput(profile, job, assessed, score, classification),
+      applicationPackSchema,
+      "application_drafts",
+      options,
+    );
+    emailSubject = pack.email.subject.trim();
+    emailBody = pack.email.body.trim();
+    hiringSubject = pack.hiringMessage.subject.trim();
+    hiringBody = pack.hiringMessage.body.trim();
+    coverSubject = pack.coverLetter.subject.trim();
+    coverBody = pack.coverLetter.body.trim();
   } catch (error) {
-    emailError = error instanceof Error ? error.message : "The email draft failed.";
+    emailError = error instanceof Error ? error.message : "The application drafts failed.";
   }
   return {
     id: randomUUID().replaceAll("-", ""),
@@ -269,10 +311,37 @@ export async function createAnalysis(profile: CandidateProfile, job: JobPosting,
     emailSubject,
     emailBody,
     emailError,
+    hiringSubject,
+    hiringBody,
+    coverSubject,
+    coverBody,
+    applicationAnswers: [],
   };
 }
 
-export async function regenerateEmail(record: AnalysisRecord, options?: CallOptions): Promise<EmailDraft> {
+export async function answerApplicationQuestion(
+  profile: CandidateProfile,
+  job: JobPosting,
+  question: string,
+  options?: CallOptions,
+): Promise<string> {
+  const cleaned = question.trim();
+  if (cleaned.length < 8 || cleaned.length > 2000) {
+    throw new AppError("Paste an application question of at least a few words.", 400);
+  }
+  const result = await parseStructured(
+    withLanguage(loadPrompt("application_answer.txt"), options?.language),
+    ["CANDIDATE PROFILE:", JSON.stringify(profile), "JOB:", JSON.stringify(job), "APPLICATION QUESTION:", cleaned].join("\n\n"),
+    applicationAnswerSchema,
+    "application_answer",
+    options,
+  );
+  const answer = result.answer.trim();
+  if (!answer) throw new AppError("The model did not return a usable result. Try again.", 502);
+  return answer;
+}
+
+export async function regenerateDraft(record: AnalysisRecord, kind: DraftKind, options?: CallOptions): Promise<EmailDraft> {
   const match: MatchResult = {
     summary: record.summary,
     categories: record.categories,
@@ -282,6 +351,12 @@ export async function regenerateEmail(record: AnalysisRecord, options?: CallOpti
     recommendations: record.recommendations,
     apply: record.apply,
   };
-  const email = await generateEmail(record.profile, record.job, match, record.score, record.classification, options);
-  return { subject: email.subject.trim(), body: email.body.trim() };
+  const draft = await parseStructured(
+    draftInstructions(kind, options?.language),
+    draftInput(record.profile, record.job, match, record.score, record.classification),
+    emailDraftSchema,
+    "application_draft",
+    options,
+  );
+  return { subject: draft.subject.trim(), body: draft.body.trim() };
 }

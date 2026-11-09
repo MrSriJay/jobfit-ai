@@ -21,6 +21,17 @@ export const emptySnapshot = (): Snapshot => ({
   draftJob: null,
 });
 
+function normalizeAnswers(value: unknown): { question: string; answer: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const question = typeof item.question === "string" ? item.question : "";
+    const answer = typeof item.answer === "string" ? item.answer : "";
+    if (!question.trim() && !answer.trim()) return [];
+    return [{ question, answer }];
+  }).slice(0, 6);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -57,6 +68,11 @@ export function loadSnapshot(): Snapshot {
       history: typedHistory.map((item) => ({
         ...item,
         profile: isRecord(item.profile) ? normalizeProfile(item.profile) : item.profile,
+        hiringSubject: typeof item.hiringSubject === "string" ? item.hiringSubject : "",
+        hiringBody: typeof item.hiringBody === "string" ? item.hiringBody : "",
+        coverSubject: typeof item.coverSubject === "string" ? item.coverSubject : "",
+        coverBody: typeof item.coverBody === "string" ? item.coverBody : "",
+        applicationAnswers: normalizeAnswers(item.applicationAnswers),
       })),
       currentAnalysisId,
       draftJob: isRecord(data.draftJob) ? (data.draftJob as unknown as JobPosting) : null,
