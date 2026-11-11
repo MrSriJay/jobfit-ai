@@ -36,7 +36,7 @@ The job and report screens use a sample profile so the layout is visible without
 
 1. Drop a PDF or DOCX CV onto the page, or add the profile manually.
 2. Review the extracted profile and keep it for later jobs.
-3. Paste a job title and description.
+3. Paste a public job link to fill the company, title, and description, or type them yourself.
 4. Read a 0–100 match score, matched skills, gaps, and recommendations.
 5. Switch between a draft email, a message to the hiring manager, and a cover letter. Edit, copy, regenerate, or open the selected draft.
 6. Paste a question from an application form. JobFit writes the answer from the saved profile and that job.
@@ -48,7 +48,7 @@ Saved analyses stay in the settings menu and on the Analysis page. Clearing loca
 
 ## Architecture
 
-The browser never receives the developer API key. A CV file is read on the server. OpenAI is called only for extraction, analysis, regenerating a draft, answering an application question, and the key check. Those requests are sent with `store` set to false.
+The browser never receives the developer API key. A CV file is read on the server. A job link is read only when you choose Fill from link. OpenAI is called only for extraction, analysis, regenerating a draft, answering an application question, reading a job page that has no structured posting, and the key check. Those requests are sent with `store` set to false.
 
 ```mermaid
 flowchart LR
@@ -72,7 +72,7 @@ flowchart LR
 ```text
 client/     React, TypeScript, Vite
 server/     Express, TypeScript
-prompts/    Instructions for extraction, matching, drafts, and application answers
+prompts/    Instructions for extraction, matching, drafts, application answers, and job pages
 ```
 
 | Piece | Role |
@@ -82,6 +82,7 @@ prompts/    Instructions for extraction, matching, drafts, and application answe
 | `jobfit-settings-v1` | Language, and your own API key and model when you choose Own |
 | `jobfit-theme-v1` | Dark or light theme |
 | `POST /api/parse` | Reads a PDF or DOCX into text. Does not call OpenAI |
+| `POST /api/job-link` | Reads a public job page into the company, title, and description. Calls OpenAI only when the page has no structured posting |
 | `POST /api/extract` | Turns CV text into a profile |
 | `POST /api/analyze` | Compares the profile with a job, then drafts the email, hiring-manager message, and cover letter |
 | `POST /api/email` | Regenerates the selected draft for a saved analysis |
@@ -157,7 +158,7 @@ A log that runs `tsc -p tsconfig.json --noEmit && vite build` means the Vercel r
 
 The CV, profile, job drafts, and match reports stay in this browser. JobFit keeps no account and no application database, so that information remains on your device and out of any public or shared store. Clearing this browser’s site data removes it.
 
-A CV is sent to OpenAI only when you extract a profile. A saved profile and a job description are sent only when you analyze a match, regenerate a draft, or answer an application question. A key check sends the active key and model so the footer can show whether they respond. Those requests are made with storage turned off.
+A CV is sent to OpenAI only when you extract a profile. A saved profile and a job description are sent only when you analyze a match, regenerate a draft, or answer an application question. Fill from link sends the page text to OpenAI only when that page has no structured job posting. A key check sends the active key and model so the footer can show whether they respond. Those requests are made with storage turned off.
 
 The built-in API key remains on the server and is not returned to the browser. A key you enter in Settings is stored only on this device, in this browser. It is not placed in a public or shared store.
 

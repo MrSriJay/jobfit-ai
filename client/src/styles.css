@@ -274,6 +274,8 @@ p { margin: 0; }
 .fine { color: var(--muted); font-size: 0.88rem; }
 .stack { display: grid; gap: 14px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.url-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.url-row .btn { white-space: nowrap; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.wrap { flex-wrap: wrap; }
 
@@ -1118,7 +1120,7 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
   .nav { order: 3; width: 100%; overflow: auto; }
   .page, .welcome-inner { width: min(960px, calc(100% - 24px)); }
   .welcome-steps { grid-template-columns: 1fr; }
-  .grid-2, .score-hero, .file-card, .card-title, .form-actions, .entry-grid, .entry-grid.certs, .choice-grid, .choice-grid.langs, .key-line { grid-template-columns: 1fr; display: grid; }
+  .grid-2, .score-hero, .file-card, .card-title, .form-actions, .entry-grid, .entry-grid.certs, .choice-grid, .choice-grid.langs, .key-line, .url-row { grid-template-columns: 1fr; display: grid; }
   .entry { grid-template-columns: auto minmax(0, 1fr); }
   .entry > .btn { grid-column: 2; margin-top: 0; justify-self: start; }
   h1 { font-size: 2rem; }

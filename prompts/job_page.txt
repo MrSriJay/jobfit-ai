@@ -1,0 +1,7 @@
+Read the text of one public job page. Return the employer, the job title, and the job description.
+
+Use only words that appear on the page. Copy the posting itself: the role, responsibilities, requirements, and the short company introduction that belongs with it. Do not shorten that posting into a summary, and do not add requirements that are not written there.
+
+Leave company empty when the employer is not on the page. Leave title empty when the job title is not on the page. Leave description empty when the page is a sign-in wall, a cookie wall, or has no job description.
+
+Write the description as plain text in the language of the posting. Drop navigation, cookie notices, footers, and apply buttons. Do not mention that the text came from a web page.

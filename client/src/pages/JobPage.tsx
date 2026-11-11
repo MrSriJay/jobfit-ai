@@ -1,8 +1,8 @@
-import { LoaderCircle, Sparkles, Upload } from "lucide-react";
+import { Link2, LoaderCircle, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { analyzeJob } from "../api";
+import { analyzeJob, fetchJobFromUrl } from "../api";
 import { FlowTip } from "../components/Tooltip";
 import { ownCredentialsReady, usePreferences } from "../preferences";
 import { useStore } from "../state";
@@ -10,6 +10,13 @@ import { dismissTip } from "../tips";
 import type { JobPosting } from "../types";
 
 const emptyJob = (): JobPosting => ({ company: "", title: "", description: "", url: "" });
+
+function normalizeJobUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^[\w.-]+\.[a-z]{2,}([/:?#]|$)/i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
 
 export function JobPage() {
   const { snapshot, setDraft, rememberAnalysis, configured, allowBuiltin } = useStore();
@@ -20,7 +27,9 @@ export function JobPage() {
   const [job, setJob] = useState<JobPosting>(fresh ? emptyJob() : snapshot.draftJob ?? emptyJob());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [filling, setFilling] = useState(false);
   const [status, setStatus] = useState("");
+  const fillRequest = useRef(0);
   const profile = snapshot.profile;
 
   const cleared = useRef(false);
@@ -36,6 +45,48 @@ export function JobPage() {
     setJob(next);
     const filled = next.company || next.title || next.description || next.url;
     setDraft(filled ? next : null);
+  };
+
+  const fillFromUrl = async (raw: string) => {
+    const url = normalizeJobUrl(raw);
+    if (!/^https?:\/\//i.test(url)) {
+      setError(m.job.urlInvalid);
+      setStatus("");
+      return;
+    }
+    const request = fillRequest.current + 1;
+    fillRequest.current = request;
+    setFilling(true);
+    setError("");
+    setStatus(m.job.filling);
+    try {
+      const filled = await fetchJobFromUrl(url);
+      if (request !== fillRequest.current) return;
+      if (filled.description.trim().length < 40) {
+        setStatus("");
+        setError(m.job.urlEmpty);
+        return;
+      }
+      let nextJob = job;
+      setJob((current) => {
+        nextJob = {
+          ...current,
+          url,
+          company: filled.company || current.company,
+          title: filled.title || current.title,
+          description: filled.description,
+        };
+        return nextJob;
+      });
+      setDraft(nextJob.company || nextJob.title || nextJob.description || nextJob.url ? nextJob : null);
+      setStatus(m.job.urlFilled);
+    } catch (caught) {
+      if (request !== fillRequest.current) return;
+      setStatus("");
+      setError(caught instanceof Error ? caught.message : m.job.urlFailed);
+    } finally {
+      if (request === fillRequest.current) setFilling(false);
+    }
   };
 
   const analyze = async () => {
@@ -105,6 +156,29 @@ export function JobPage() {
       ) : null}
 
       <div className="card stack">
+        <label className="field">
+          <span>{m.job.url}</span>
+          <div className="url-row">
+            <input
+              value={job.url}
+              placeholder="https://"
+              onChange={(event) => update({ ...job, url: event.target.value })}
+              onPaste={(event) => {
+                const text = event.clipboardData.getData("text").trim();
+                if (!text) return;
+                event.preventDefault();
+                const url = normalizeJobUrl(text);
+                update({ ...job, url });
+                void fillFromUrl(url);
+              }}
+            />
+            <button className="btn ghost" type="button" disabled={busy || filling || !job.url.trim()} onClick={() => void fillFromUrl(job.url)}>
+              {filling ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
+              {m.job.fill}
+            </button>
+          </div>
+          <small>{m.job.urlHint}</small>
+        </label>
         <div className="grid-2">
           <label className="field">
             <span>{m.job.company}</span>
@@ -116,10 +190,6 @@ export function JobPage() {
           </label>
         </div>
         <label className="field">
-          <span>{m.job.url}</span>
-          <input value={job.url} placeholder={m.job.optional} onChange={(event) => update({ ...job, url: event.target.value })} />
-        </label>
-        <label className="field">
           <span>{m.job.description}</span>
           <textarea
             rows={12}
@@ -129,9 +199,9 @@ export function JobPage() {
           />
         </label>
         <p className="fine">{m.job.fine}</p>
-        {status ? <p className="status-line">{busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} {status}</p> : null}
+        {status ? <p className="status-line">{busy || filling ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} {status}</p> : null}
         <FlowTip id="job" block above label={m.job.tip}>
-          <button className="btn primary wide" type="button" disabled={busy} onClick={() => void analyze()}>
+          <button className="btn primary wide" type="button" disabled={busy || filling} onClick={() => void analyze()}>
             {busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
             {m.job.analyze}
           </button>

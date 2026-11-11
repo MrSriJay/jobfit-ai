@@ -4,7 +4,8 @@ import multer from "multer";
 import { ALLOW_BUILTIN, MODEL, PORT } from "./config.js";
 import { parseDocument } from "./documents.js";
 import { AppError, publicErrorText } from "./errors.js";
-import { answerApplicationQuestion, apiKeyConfigured, checkApiKey, createAnalysis, extractProfile, readCallOptions, regenerateDraft } from "./openai.js";
+import { loadJobPage } from "./jobPage.js";
+import { answerApplicationQuestion, apiKeyConfigured, checkApiKey, createAnalysis, extractJobPage, extractProfile, readCallOptions, regenerateDraft } from "./openai.js";
 import { candidateProfileSchema, jobPostingSchema, matchResultSchema } from "./schemas.js";
 
 const app = express();
@@ -37,6 +38,28 @@ app.post("/api/parse", upload.single("cv"), async (req, res, next) => {
       preview: text.slice(0, 4000),
       text,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/job-link", async (req, res, next) => {
+  try {
+    const url = typeof req.body?.url === "string" ? req.body.url : "";
+    const page = await loadJobPage(url);
+    let company = page.company.trim();
+    let title = page.title.trim();
+    let description = page.description.trim();
+    if (description.length < 40) {
+      const extracted = await extractJobPage(page.text, readCallOptions(req.body));
+      company = company || extracted.company;
+      title = title || extracted.title;
+      description = extracted.description || description;
+    }
+    if (description.trim().length < 40) {
+      throw new AppError("This page did not include the job text. Enter the details below.");
+    }
+    res.json({ company, title, description: description.trim() });
   } catch (error) {
     next(error);
   }

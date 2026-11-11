@@ -46,6 +46,21 @@ export async function extractProfile(text: string): Promise<{ profile: Candidate
   return response.json() as Promise<{ profile: CandidateProfile; truncated: boolean; fromCache: boolean }>;
 }
 
+export async function fetchJobFromUrl(url: string): Promise<{ company: string; title: string; description: string }> {
+  const response = await fetch("/api/job-link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, options: requestOptions() }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const data = (await response.json()) as { company?: string; title?: string; description?: string };
+  return {
+    company: data.company?.trim() ?? "",
+    title: data.title?.trim() ?? "",
+    description: data.description?.trim() ?? "",
+  };
+}
+
 export async function analyzeJob(profile: CandidateProfile, job: JobPosting): Promise<AnalysisRecord> {
   const response = await fetch("/api/analyze", {
     method: "POST",

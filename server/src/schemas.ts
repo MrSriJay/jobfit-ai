@@ -51,6 +51,12 @@ export const jobPostingSchema = z.object({
   url: z.string().default(""),
 });
 
+export const jobPageSchema = z.object({
+  company: text("Employer name as written on the page. Empty if it is not there."),
+  title: text("Job title as written on the page. Empty if it is not there."),
+  description: text("The job description copied from the page. Empty if the page has no job description."),
+});
+
 export const categorySchema = z.object({
   criterion: z.enum(["skills", "experience", "responsibilities", "seniority", "education"]),
   score: z.number().describe("0 to 100, based only on evidence in the CV and the job."),

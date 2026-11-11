@@ -15,6 +15,7 @@ import {
   applicationPackSchema,
   candidateProfileSchema,
   emailDraftSchema,
+  jobPageSchema,
   matchResultSchema,
   type AnalysisRecord,
   type CandidateProfile,
@@ -32,6 +33,7 @@ const promptFiles: Record<string, URL> = {
   "job_matching.txt": new URL("../../prompts/job_matching.txt", import.meta.url),
   "email_generation.txt": new URL("../../prompts/email_generation.txt", import.meta.url),
   "application_answer.txt": new URL("../../prompts/application_answer.txt", import.meta.url),
+  "job_page.txt": new URL("../../prompts/job_page.txt", import.meta.url),
 };
 
 function loadPrompt(filename: string): string {
@@ -178,6 +180,25 @@ async function parseStructured<T>(
     }
   }
   throw new AppError("The model did not return a usable result. Try again.", 502);
+}
+
+export async function extractJobPage(pageText: string, options?: CallOptions): Promise<{ company: string; title: string; description: string }> {
+  const clipped = pageText.trim().slice(0, 20_000);
+  if (clipped.length < 400) {
+    throw new AppError("This page did not include the job text. Enter the details below.");
+  }
+  const parsed = await parseStructured(
+    loadPrompt("job_page.txt"),
+    `JOB PAGE TEXT:\n${clipped}`,
+    jobPageSchema,
+    "job_page",
+    options,
+  );
+  return {
+    company: parsed.company.trim().slice(0, 200),
+    title: parsed.title.trim().slice(0, 200),
+    description: parsed.description.trim().slice(0, MAX_JOB_CHARS),
+  };
 }
 
 export async function extractProfile(cvText: string, options?: CallOptions): Promise<{ profile: CandidateProfile; truncated: boolean; fromCache: boolean }> {
