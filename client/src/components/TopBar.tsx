@@ -23,6 +23,7 @@ export function TopBar() {
   );
 
   return (
+    <>
     <header className="topbar">
       <Link className="brand" to="/" aria-label={m.nav.home}>
         <Logo size={42} />
@@ -80,5 +81,31 @@ export function TopBar() {
         />
       </div>
     </header>
+    <nav className="tabbar" aria-label="Main">
+      <NavLink to="/upload" className={({ isActive }) => (isActive ? "active" : "")}>
+        <UserRound size={20} aria-hidden="true" />
+        <span>{m.nav.profile}</span>
+      </NavLink>
+      {snapshot.profile ? (
+        <NavLink to="/analysis" className={({ isActive }) => (isActive ? "active" : "")}>
+          <History size={20} aria-hidden="true" />
+          <span>{m.nav.analysis}</span>
+        </NavLink>
+      ) : null}
+      {snapshot.profile ? (
+        <Link className="tabbar-action" to="/job" state={{ fresh: true }} aria-label={m.nav.newAnalysis}>
+          <Plus size={22} />
+        </Link>
+      ) : (
+        <Link className="tabbar-action" to="/upload" aria-label={m.nav.uploadCv}>
+          <Upload size={22} />
+        </Link>
+      )}
+      <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+        <Settings size={20} aria-hidden="true" />
+        <span>{m.nav.settings}</span>
+      </NavLink>
+    </nav>
+  </>
   );
 }

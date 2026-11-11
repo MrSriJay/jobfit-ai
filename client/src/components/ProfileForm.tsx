@@ -97,7 +97,7 @@ export function ProfileForm({
         save();
       }}
     >
-      <div className="tabs" role="tablist" aria-label={m.profile.sections}>
+      <div className="tabs profile-tabs" role="tablist" aria-label={m.profile.sections}>
         {tabs.map((item) => (
           <button
             key={item.id}

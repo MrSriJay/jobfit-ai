@@ -1,6 +1,8 @@
 import { Eye, EyeOff, KeyRound, Languages } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
+import { FeedbackForm } from "../components/FeedbackForm";
 import { LOCALES, modelNameValid, ownKeyValid, usePreferences } from "../preferences";
 import { useStore } from "../state";
 
@@ -15,6 +17,8 @@ const MODEL_SUGGESTIONS = [
 export function SettingsPage() {
   const { prefs, m, update, fill } = usePreferences();
   const { configured, allowBuiltin, builtinModel, notify } = useStore();
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "feedback" ? "feedback" : "general";
   const [useOwnKey, setUseOwnKey] = useState(prefs.useOwnKey || !allowBuiltin);
   const [apiKey, setApiKey] = useState(prefs.apiKey);
   const [model, setModel] = useState(prefs.model);
@@ -53,6 +57,26 @@ export function SettingsPage() {
   return (
     <section className="page settings-page">
       <h1>{m.settings.title}</h1>
+      <div className="settings-tabs" role="tablist" aria-label={m.settings.title}>
+        <button className={tab === "general" ? "active" : ""} type="button" role="tab" aria-selected={tab === "general"} onClick={() => setParams({}, { replace: true })}>
+          {m.menu.settings}
+        </button>
+        <button
+          className={tab === "feedback" ? "active" : ""}
+          type="button"
+          role="tab"
+          aria-selected={tab === "feedback"}
+          onClick={() => setParams({ tab: "feedback" }, { replace: true })}
+        >
+          {m.feedback.title}
+        </button>
+      </div>
+      {tab === "feedback" ? (
+        <article className="card stack">
+          <FeedbackForm />
+        </article>
+      ) : (
+        <>
       <p className="lede">{m.settings.lede}</p>
 
       <article className="card stack">
@@ -154,6 +178,8 @@ export function SettingsPage() {
           {m.settings.save}
         </button>
       </article>
+        </>
+      )}
     </section>
   );
 }

@@ -39,6 +39,7 @@ export function ResultsPage() {
     return (
       <section className="page">
         <h1>{m.analysis.title}</h1>
+        <p className="lede">{m.analysis.lede}</p>
         {snapshot.history.length === 0 ? (
           <div className="empty">
             <Sparkles size={18} />

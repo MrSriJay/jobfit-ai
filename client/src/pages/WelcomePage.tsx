@@ -11,22 +11,11 @@ export function WelcomePage() {
   const { snapshot } = useStore();
   const { m } = usePreferences();
   if (snapshot.profile) {
-    return <Navigate to="/upload" replace />;
+    return <Navigate to="/analysis" replace />;
   }
 
   return (
     <section className="welcome">
-      <div className="welcome-bg" aria-hidden="true">
-        <span className="glow glow-yellow" />
-        <span className="glow glow-blue" />
-        <span className="glow glow-yellow-soft" />
-        <span className="float-doc" />
-        <span className="float-ring" />
-        <span className="float-tile" />
-        <span className="float-dot dot-a" />
-        <span className="float-dot dot-b" />
-        <span className="float-dot dot-c" />
-      </div>
       <div className="welcome-inner">
         <Logo size={84} />
         <p className="eyebrow wordmark"><span className="mark-job">Job</span><span className="mark-fit">Fit</span></p>

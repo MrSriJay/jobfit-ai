@@ -1,9 +1,12 @@
+import { MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 
 import { apiKeyCheck } from "./api";
 import { AboutProvider, useOpenAbout } from "./components/AboutDialog";
+import { AppBackground } from "./components/AppBackground";
+import { FeedbackDialog } from "./components/FeedbackForm";
 import { TopBar } from "./components/TopBar";
 import { JobPage } from "./pages/JobPage";
 import { ResultsPage } from "./pages/ResultsPage";
@@ -22,6 +25,7 @@ export function App() {
       <BrowserRouter>
         <AboutProvider>
           <div className="shell">
+            <AppBackground />
             <TopBar />
             <main>
               <Routes>
@@ -97,6 +101,7 @@ function SiteFoot() {
   const { allowBuiltin } = useStore();
   const { prefs, m } = usePreferences();
   const marks = useKeyMarks();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const usingOwn = !allowBuiltin || prefs.useOwnKey;
   const unreachable = usingOwn ? m.footer.notChecked : m.footer.notConnected;
   const configuredLabel =
@@ -115,6 +120,12 @@ function SiteFoot() {
           {m.footer.about}
         </button>
       </p>
+      <div className="foot-feedback">
+        <button className="btn ghost" type="button" onClick={() => setFeedbackOpen(true)}>
+          <MessageSquare size={15} /> {m.feedback.title}
+        </button>
+      </div>
+      <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </footer>
   );
 }

@@ -169,7 +169,7 @@ export function UploadPage() {
             }}
             next={
               <FlowTip id="next" block label={m.upload.tipNext}>
-                <Link className="btn primary" to="/job" onClick={() => dismissTip("next")}>
+                <Link className="btn primary" to="/job" state={{ fresh: true }} onClick={() => dismissTip("next")}>
                   {m.upload.next} <ArrowRight size={16} />
                 </Link>
               </FlowTip>
