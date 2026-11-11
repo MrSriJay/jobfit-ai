@@ -61,6 +61,20 @@ export async function fetchJobFromUrl(url: string): Promise<{ company: string; t
   };
 }
 
+export async function fetchJobFromImage(file: File): Promise<{ company: string; title: string; description: string }> {
+  const body = new FormData();
+  body.append("image", file);
+  body.append("options", JSON.stringify(requestOptions()));
+  const response = await fetch("/api/job-image", { method: "POST", body });
+  if (!response.ok) throw new Error(await readError(response));
+  const data = (await response.json()) as { company?: string; title?: string; description?: string };
+  return {
+    company: data.company?.trim() ?? "",
+    title: data.title?.trim() ?? "",
+    description: data.description?.trim() ?? "",
+  };
+}
+
 export async function analyzeJob(profile: CandidateProfile, job: JobPosting): Promise<AnalysisRecord> {
   const response = await fetch("/api/analyze", {
     method: "POST",

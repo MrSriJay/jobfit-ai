@@ -1,8 +1,8 @@
-import { Link2, LoaderCircle, Sparkles, Upload } from "lucide-react";
+import { ImagePlus, Link2, LoaderCircle, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { analyzeJob, fetchJobFromUrl } from "../api";
+import { analyzeJob, fetchJobFromImage, fetchJobFromUrl } from "../api";
 import { FlowTip } from "../components/Tooltip";
 import { ownCredentialsReady, usePreferences } from "../preferences";
 import { useStore } from "../state";
@@ -10,6 +10,8 @@ import { dismissTip } from "../tips";
 import type { JobPosting } from "../types";
 
 const emptyJob = (): JobPosting => ({ company: "", title: "", description: "", url: "" });
+const imageTypes = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]);
+const maxImageBytes = 8 * 1024 * 1024;
 
 function normalizeJobUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -27,9 +29,13 @@ export function JobPage() {
   const [job, setJob] = useState<JobPosting>(fresh ? emptyJob() : snapshot.draftJob ?? emptyJob());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [filling, setFilling] = useState(false);
+  const [source, setSource] = useState<"link" | "image">("link");
+  const [fillMode, setFillMode] = useState<"" | "url" | "image">("");
+  const [imageName, setImageName] = useState("");
   const [status, setStatus] = useState("");
   const fillRequest = useRef(0);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const filling = fillMode !== "";
   const profile = snapshot.profile;
 
   const cleared = useRef(false);
@@ -47,6 +53,32 @@ export function JobPage() {
     setDraft(filled ? next : null);
   };
 
+  const applyFilled = (
+    filled: { company: string; title: string; description: string },
+    patch: Partial<JobPosting>,
+    emptyMessage: string,
+    filledMessage: string,
+  ) => {
+    if (filled.description.trim().length < 40) {
+      setStatus("");
+      setError(emptyMessage);
+      return;
+    }
+    let nextJob = job;
+    setJob((current) => {
+      nextJob = {
+        ...current,
+        ...patch,
+        company: filled.company || current.company,
+        title: filled.title || current.title,
+        description: filled.description,
+      };
+      return nextJob;
+    });
+    setDraft(nextJob.company || nextJob.title || nextJob.description || nextJob.url ? nextJob : null);
+    setStatus(filledMessage);
+  };
+
   const fillFromUrl = async (raw: string) => {
     const url = normalizeJobUrl(raw);
     if (!/^https?:\/\//i.test(url)) {
@@ -56,36 +88,45 @@ export function JobPage() {
     }
     const request = fillRequest.current + 1;
     fillRequest.current = request;
-    setFilling(true);
+    setFillMode("url");
     setError("");
     setStatus(m.job.filling);
     try {
       const filled = await fetchJobFromUrl(url);
       if (request !== fillRequest.current) return;
-      if (filled.description.trim().length < 40) {
-        setStatus("");
-        setError(m.job.urlEmpty);
-        return;
-      }
-      let nextJob = job;
-      setJob((current) => {
-        nextJob = {
-          ...current,
-          url,
-          company: filled.company || current.company,
-          title: filled.title || current.title,
-          description: filled.description,
-        };
-        return nextJob;
-      });
-      setDraft(nextJob.company || nextJob.title || nextJob.description || nextJob.url ? nextJob : null);
-      setStatus(m.job.urlFilled);
+      applyFilled(filled, { url }, m.job.urlEmpty, m.job.urlFilled);
     } catch (caught) {
       if (request !== fillRequest.current) return;
       setStatus("");
       setError(caught instanceof Error ? caught.message : m.job.urlFailed);
     } finally {
-      if (request === fillRequest.current) setFilling(false);
+      if (request === fillRequest.current) setFillMode("");
+    }
+  };
+
+  const fillFromImage = async (file: File) => {
+    if (!imageTypes.has(file.type) || file.size > maxImageBytes || file.size < 32) {
+      setError(m.job.imageInvalid);
+      setStatus("");
+      return;
+    }
+    const request = fillRequest.current + 1;
+    fillRequest.current = request;
+    setSource("image");
+    setImageName(file.name || m.job.imageChoose);
+    setFillMode("image");
+    setError("");
+    setStatus(m.job.imageFilling);
+    try {
+      const filled = await fetchJobFromImage(file);
+      if (request !== fillRequest.current) return;
+      applyFilled(filled, {}, m.job.imageEmpty, m.job.imageFilled);
+    } catch (caught) {
+      if (request !== fillRequest.current) return;
+      setStatus("");
+      setError(caught instanceof Error ? caught.message : m.job.imageFailed);
+    } finally {
+      if (request === fillRequest.current) setFillMode("");
     }
   };
 
@@ -155,30 +196,72 @@ export function JobPage() {
         </div>
       ) : null}
 
-      <div className="card stack">
-        <label className="field">
-          <span>{m.job.url}</span>
-          <div className="url-row">
-            <input
-              value={job.url}
-              placeholder="https://"
-              onChange={(event) => update({ ...job, url: event.target.value })}
-              onPaste={(event) => {
-                const text = event.clipboardData.getData("text").trim();
-                if (!text) return;
-                event.preventDefault();
-                const url = normalizeJobUrl(text);
-                update({ ...job, url });
-                void fillFromUrl(url);
-              }}
-            />
-            <button className="btn ghost" type="button" disabled={busy || filling || !job.url.trim()} onClick={() => void fillFromUrl(job.url)}>
-              {filling ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
-              {m.job.fill}
-            </button>
+      <div
+        className="card stack"
+        onPaste={(event) => {
+          const image = [...event.clipboardData.files].find((item) => item.type.startsWith("image/"));
+          if (!image || busy || filling) return;
+          event.preventDefault();
+          void fillFromImage(image);
+        }}
+      >
+        <div className="tabs" role="tablist" aria-label={m.job.title}>
+          <button className={source === "link" ? "active" : ""} type="button" role="tab" aria-selected={source === "link"} onClick={() => setSource("link")}>
+            <Link2 size={16} /> {m.job.url}
+          </button>
+          <button className={source === "image" ? "active" : ""} type="button" role="tab" aria-selected={source === "image"} onClick={() => setSource("image")}>
+            <ImagePlus size={16} /> {m.job.image}
+          </button>
+        </div>
+        {source === "link" ? (
+          <label className="field">
+            <div className="url-row">
+              <input
+                value={job.url}
+                placeholder="https://"
+                onChange={(event) => update({ ...job, url: event.target.value })}
+                onPaste={(event) => {
+                  if ([...event.clipboardData.files].some((item) => item.type.startsWith("image/"))) return;
+                  const text = event.clipboardData.getData("text").trim();
+                  if (!text) return;
+                  event.preventDefault();
+                  const url = normalizeJobUrl(text);
+                  update({ ...job, url });
+                  void fillFromUrl(url);
+                }}
+              />
+              <button className="btn ghost" type="button" disabled={busy || filling || !job.url.trim()} onClick={() => void fillFromUrl(job.url)}>
+                {fillMode === "url" ? <LoaderCircle className="spin" size={16} /> : <Link2 size={16} />}
+                {m.job.fill}
+              </button>
+            </div>
+            <small>{m.job.urlHint}</small>
+          </label>
+        ) : (
+          <div className="field">
+            <div className="url-row">
+              <label className="file-slot">
+                <ImagePlus size={16} />
+                <span className={imageName ? "chosen" : ""}>{imageName || m.job.imageChoose}</span>
+                <input
+                  ref={imageInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void fillFromImage(file);
+                  }}
+                />
+              </label>
+              <button className="btn ghost" type="button" disabled={busy || filling} onClick={() => imageInput.current?.click()}>
+                {fillMode === "image" ? <LoaderCircle className="spin" size={16} /> : <ImagePlus size={16} />}
+                {m.job.imageFill}
+              </button>
+            </div>
+            <small>{m.job.imageHint}</small>
           </div>
-          <small>{m.job.urlHint}</small>
-        </label>
+        )}
         <div className="grid-2">
           <label className="field">
             <span>{m.job.company}</span>

@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/score.test.ts src/documents.test.ts src/jobPage.test.ts"
+    "test": "tsx --test src/score.test.ts src/documents.test.ts src/jobPage.test.ts src/jobImage.test.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

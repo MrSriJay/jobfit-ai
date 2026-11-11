@@ -1,0 +1,7 @@
+Read one image of a job post. Return the employer, the job title, and the job description.
+
+Use only words visible in the image. Copy the posting itself: the role, responsibilities, requirements, and the short company introduction that belongs with it. Do not shorten that posting into a summary, and do not add requirements that are not written there.
+
+Leave company empty when the employer is not visible. Leave title empty when the job title is not visible. Leave description empty when the image is not a job post or the description cannot be read.
+
+Write the description as plain text in the language of the posting. Drop navigation, cookie notices, and apply buttons. Do not mention that the text came from an image.

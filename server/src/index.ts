@@ -4,8 +4,9 @@ import multer from "multer";
 import { ALLOW_BUILTIN, MODEL, PORT } from "./config.js";
 import { parseDocument } from "./documents.js";
 import { AppError, publicErrorText } from "./errors.js";
+import { jobImageType } from "./jobImage.js";
 import { loadJobPage } from "./jobPage.js";
-import { answerApplicationQuestion, apiKeyConfigured, checkApiKey, createAnalysis, extractJobPage, extractProfile, readCallOptions, regenerateDraft } from "./openai.js";
+import { answerApplicationQuestion, apiKeyConfigured, checkApiKey, createAnalysis, extractJobImage, extractJobPage, extractProfile, readCallOptions, regenerateDraft } from "./openai.js";
 import { candidateProfileSchema, jobPostingSchema, matchResultSchema } from "./schemas.js";
 
 const app = express();
@@ -60,6 +61,22 @@ app.post("/api/job-link", async (req, res, next) => {
       throw new AppError("This page did not include the job text. Enter the details below.");
     }
     res.json({ company, title, description: description.trim() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/job-image", upload.single("image"), async (req, res, next) => {
+  try {
+    if (!req.file) throw new AppError("Choose an image of the job post.");
+    if (req.file.size > 8 * 1024 * 1024) throw new AppError("That image is larger than 8 MB.");
+    const mime = jobImageType(req.file.mimetype, req.file.buffer);
+    if (!mime) throw new AppError("Choose a PNG, JPEG, WEBP, or GIF image.");
+    const extracted = await extractJobImage(req.file.buffer, mime, readCallOptions(parseOptions(req.body)));
+    if (extracted.description.trim().length < 40) {
+      throw new AppError("This image did not include the job text. Enter the details below.");
+    }
+    res.json(extracted);
   } catch (error) {
     next(error);
   }
@@ -163,6 +180,17 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   const status = error instanceof AppError ? error.status : 500;
   res.status(status).json({ error: publicErrorText(error) });
 });
+
+function parseOptions(body: unknown): unknown {
+  if (!body || typeof body !== "object") return body;
+  const raw = (body as { options?: unknown }).options;
+  if (typeof raw !== "string") return body;
+  try {
+    return { options: JSON.parse(raw) as unknown };
+  } catch {
+    return {};
+  }
+}
 
 if (process.env.VERCEL !== "1") {
   app.listen(PORT, "127.0.0.1", () => {

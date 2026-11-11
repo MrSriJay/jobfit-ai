@@ -34,6 +34,7 @@ const promptFiles: Record<string, URL> = {
   "email_generation.txt": new URL("../../prompts/email_generation.txt", import.meta.url),
   "application_answer.txt": new URL("../../prompts/application_answer.txt", import.meta.url),
   "job_page.txt": new URL("../../prompts/job_page.txt", import.meta.url),
+  "job_image.txt": new URL("../../prompts/job_image.txt", import.meta.url),
 };
 
 function loadPrompt(filename: string): string {
@@ -148,7 +149,7 @@ function rejectedReasoningEffort(error: unknown): boolean {
 
 async function parseStructured<T>(
   instructions: string,
-  userInput: string,
+  userInput: string | OpenAI.Responses.ResponseInput,
   schema: ZodType<T>,
   name: string,
   options?: CallOptions,
@@ -192,6 +193,29 @@ export async function extractJobPage(pageText: string, options?: CallOptions): P
     `JOB PAGE TEXT:\n${clipped}`,
     jobPageSchema,
     "job_page",
+    options,
+  );
+  return {
+    company: parsed.company.trim().slice(0, 200),
+    title: parsed.title.trim().slice(0, 200),
+    description: parsed.description.trim().slice(0, MAX_JOB_CHARS),
+  };
+}
+
+export async function extractJobImage(image: Buffer, mime: string, options?: CallOptions): Promise<{ company: string; title: string; description: string }> {
+  const parsed = await parseStructured(
+    loadPrompt("job_image.txt"),
+    [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: "Read the job post in this image." },
+          { type: "input_image", image_url: `data:${mime};base64,${image.toString("base64")}`, detail: "high" },
+        ],
+      },
+    ],
+    jobPageSchema,
+    "job_image",
     options,
   );
   return {
