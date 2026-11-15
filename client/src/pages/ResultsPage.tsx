@@ -487,13 +487,11 @@ function Report({
         <div className="draft-field">
           <div className="field-head">
             <label htmlFor="draft-body">{m.analysis.bodyLabel[kind]}</label>
-          </div>
-          <div className="copy-box is-text">
-            <textarea id="draft-body" value={body} onChange={(event) => setBody(event.target.value)} onBlur={persistDraft} />
             <button className="copy-chip" type="button" aria-label={m.analysis.copy} disabled={!body.trim()} onClick={() => void copyText(body, m.analysis.copied[kind])}>
               <Copy size={14} />
             </button>
           </div>
+          <textarea id="draft-body" value={body} onChange={(event) => setBody(event.target.value)} onBlur={persistDraft} />
         </div>
         <div className="draft-actions">
           <button className="btn ghost wide" type="button" disabled={busy} onClick={() => void regenerate()}>

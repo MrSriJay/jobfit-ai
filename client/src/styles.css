@@ -709,10 +709,32 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
 .draft-field { display: grid; gap: 6px; }
 .draft-field > label,
 .field-head label { font-size: 0.86rem; font-weight: 700; }
+.draft-field:has(.field-head) {
+  gap: 4px;
+  margin-top: 10px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 2px 2px;
+}
+.draft-email .draft-field:has(.field-head) textarea {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.draft-email .draft-field:has(.field-head) textarea:focus {
+  border-color: var(--blue);
+  background: transparent;
+}
 .copy-box { position: relative; }
-.copy-box input,
-.copy-box textarea { padding-right: 44px; }
-.copy-box.is-text textarea { padding-top: 12px; }
+.copy-box input { padding-right: 44px; }
 .copy-chip {
   position: absolute;
   top: 50%;
@@ -728,7 +750,7 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
   background: var(--raise);
   color: var(--ink);
 }
-.copy-box.is-text .copy-chip { top: 8px; right: 14px; transform: none; }
+.field-head .copy-chip { position: static; transform: none; flex: none; }
 .copy-chip:hover:not(:disabled) { border-color: var(--blue); color: var(--blue-text); }
 .copy-chip:disabled { opacity: 0.4; cursor: default; }
 .draft-email textarea {
