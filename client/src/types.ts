@@ -75,6 +75,7 @@ export interface AnalysisRecord extends MatchResult {
   classification: string;
   emailSubject: string;
   emailBody: string;
+  emailTo?: string;
   emailError: string;
   hiringSubject: string;
   hiringBody: string;

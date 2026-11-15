@@ -706,10 +706,31 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px r
 }
 .draft-kinds button:disabled { opacity: 0.7; }
 .draft-email .banner { margin: 0; }
-.draft-email .draft-body {
-  flex: none;
-  grid-template-rows: auto auto;
+.draft-field { display: grid; gap: 6px; }
+.draft-field > label,
+.field-head label { font-size: 0.86rem; font-weight: 700; }
+.copy-box { position: relative; }
+.copy-box input,
+.copy-box textarea { padding-right: 44px; }
+.copy-box.is-text textarea { padding-top: 12px; }
+.copy-chip {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--raise);
+  color: var(--ink);
 }
+.copy-box.is-text .copy-chip { top: 8px; right: 14px; transform: none; }
+.copy-chip:hover:not(:disabled) { border-color: var(--blue); color: var(--blue-text); }
+.copy-chip:disabled { opacity: 0.4; cursor: default; }
 .draft-email textarea {
   height: 220px;
   min-height: 160px;

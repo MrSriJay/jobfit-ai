@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { apiStatus } from "./api";
+import { clearCvFile, deleteCvDatabase } from "./cvFile";
 import { loadSnapshot, MAX_HISTORY, saveSnapshot, type Snapshot } from "./storage";
 import type { AnalysisRecord, CandidateProfile, JobPosting } from "./types";
 
@@ -100,6 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
       },
       clearCv: (message = "CV and profile removed") => {
+        void clearCvFile();
         setSnapshot((current) => ({ ...current, profile: null, cvFilename: "" }));
         setProfileNonce((value) => value + 1);
         setNotice(message);
@@ -128,6 +130,7 @@ async function clearSiteStorage(): Promise<void> {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
   }
+  await deleteCvDatabase();
 }
 
 export function useStore(): Store {

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 
 import { extractProfile, parseCv } from "../api";
+import { saveCvFile } from "../cvFile";
 import { ProfileForm } from "../components/ProfileForm";
 import { FlowTip, Tooltip } from "../components/Tooltip";
 import { ownCredentialsReady, usePreferences } from "../preferences";
@@ -80,6 +81,7 @@ export function UploadPage() {
     setBusy("parse");
     try {
       setParsed(await parseCv(file));
+      await saveCvFile(file).catch(() => undefined);
     } catch (caught) {
       setParsed(null);
       setError(caught instanceof Error ? caught.message : m.upload.readFailed);

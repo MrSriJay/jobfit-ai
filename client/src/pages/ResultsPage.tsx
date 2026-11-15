@@ -3,7 +3,10 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { answerQuestion, regenerateDraft } from "../api";
+import { loadCvFile } from "../cvFile";
 import { FlowTip } from "../components/Tooltip";
+import { buildEml, downloadEml } from "../eml";
+import { jobRecipient } from "../jobEmail";
 import { buildReportPdf, downloadPdf, safeFilename } from "../pdf";
 import { useStore } from "../state";
 import { dismissTip } from "../tips";
@@ -17,8 +20,8 @@ const SECTION_IDS = ["overview", "scores", "skills", "advice"] as const;
 
 type SectionId = (typeof SECTION_IDS)[number];
 
-function mailto(subject: string, body: string): string | null {
-  const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+function mailto(to: string, subject: string, body: string): string | null {
+  const url = `mailto:${encodeURIComponent(to.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return url.length > MAILTO_LIMIT ? null : url;
 }
 
@@ -94,6 +97,7 @@ function Report({
   notify: (message: string) => void;
 }) {
   const [kind, setKind] = useState<DraftKind>("email");
+  const [to, setTo] = useState(() => record.emailTo ?? jobRecipient(record.job.description, record.profile.email));
   const [subject, setSubject] = useState(record.emailSubject);
   const [body, setBody] = useState(record.emailBody);
   const [busy, setBusy] = useState(false);
@@ -107,7 +111,7 @@ function Report({
   const [tab, setTab] = useState<SectionId>("overview");
   const company = record.job.company.trim();
   const heading = company ? `${record.job.title} at ${company}` : record.job.title;
-  const mail = mailto(subject, body);
+  const mail = mailto(to, subject, body);
   const posting = /^https?:\/\//i.test(record.job.url.trim()) ? record.job.url.trim() : "";
 
   useEffect(() => {
@@ -150,14 +154,16 @@ function Report({
     setError(!fields.subject && !fields.body ? record.emailError : "");
   }, [record, kind]);
 
+  const withRecipient = (saved: AnalysisRecord) => ((saved.emailTo ?? "") === to ? saved : { ...saved, emailTo: to });
+
   const persistDraft = () => {
-    const saved = writeDraft(record, kind, subject, body);
+    const saved = withRecipient(writeDraft(record, kind, subject, body));
     if (saved !== record) onChange(saved);
   };
 
   const switchKind = (next: DraftKind) => {
     if (next === kind || busy) return;
-    const saved = writeDraft(record, kind, subject, body);
+    const saved = withRecipient(writeDraft(record, kind, subject, body));
     if (saved !== record) onChange(saved);
     const fields = readDraft(saved, next);
     setKind(next);
@@ -166,14 +172,30 @@ function Report({
     setError(!fields.subject && !fields.body ? saved.emailError : "");
   };
 
-  const copyDraft = async () => {
-    const label = kind === "cover" ? m.analysis.subjectLabel.cover : m.analysis.subject;
+  const copyText = async (value: string, message: string) => {
     try {
-      await navigator.clipboard.writeText(`${label}: ${subject}\n\n${body}`);
-      notify(m.analysis.copied[kind]);
+      await navigator.clipboard.writeText(value);
+      notify(message);
     } catch {
       setError(m.analysis.copyFailed);
     }
+  };
+
+  const openMail = async () => {
+    const saved = withRecipient(writeDraft(record, kind, subject, body));
+    if (saved !== record) onChange(saved);
+    const file = await loadCvFile().catch(() => null);
+    if (file) {
+      downloadEml(buildEml({ to, subject, body, file }), `${safeFilename(`jobfit-${record.job.company}-${record.job.title}`)}.eml`);
+      notify(m.analysis.mailWithCv);
+      return;
+    }
+    if (!mail) {
+      setError(m.analysis.tooLong);
+      return;
+    }
+    notify(m.analysis.mailNoCv);
+    window.location.href = mail;
   };
 
   const download = async () => {
@@ -188,7 +210,7 @@ function Report({
       const draft = await regenerateDraft(record, kind);
       setSubject(draft.subject);
       setBody(draft.body);
-      onChange(writeDraft(record, kind, draft.subject, draft.body));
+      onChange(withRecipient(writeDraft(record, kind, draft.subject, draft.body)));
       notify(m.analysis.updated[kind]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : m.analysis.failed[kind]);
@@ -431,36 +453,59 @@ function Report({
           </div>
         ) : null}
         {!subject.trim() && !body.trim() && !error ? <p className="fine">{m.analysis.draftHint}</p> : null}
-        <label className="field">
-          <span>{m.analysis.subjectLabel[kind]}</span>
-          <input
-            value={subject}
-            onChange={(event) => setSubject(event.target.value)}
-            onBlur={persistDraft}
-          />
-        </label>
-        <label className="field draft-body">
-          <span>{m.analysis.bodyLabel[kind]}</span>
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} onBlur={persistDraft} />
-        </label>
+        {kind === "email" ? (
+          <div className="draft-field">
+            <label htmlFor="draft-to">{m.analysis.to}</label>
+            <div className="copy-box">
+              <input
+                id="draft-to"
+                value={to}
+                placeholder="name@company.com"
+                onChange={(event) => setTo(event.target.value)}
+                onBlur={persistDraft}
+              />
+              <button className="copy-chip" type="button" aria-label={m.analysis.copy} disabled={!to.trim()} onClick={() => void copyText(to, m.analysis.addressCopied)}>
+                <Copy size={14} />
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div className="draft-field">
+          <label htmlFor="draft-subject">{m.analysis.subjectLabel[kind]}</label>
+          <div className="copy-box">
+            <input
+              id="draft-subject"
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              onBlur={persistDraft}
+            />
+            <button className="copy-chip" type="button" aria-label={m.analysis.copySubject} disabled={!subject.trim()} onClick={() => void copyText(subject, m.analysis.subjectCopied)}>
+              <Copy size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="draft-field">
+          <div className="field-head">
+            <label htmlFor="draft-body">{m.analysis.bodyLabel[kind]}</label>
+          </div>
+          <div className="copy-box is-text">
+            <textarea id="draft-body" value={body} onChange={(event) => setBody(event.target.value)} onBlur={persistDraft} />
+            <button className="copy-chip" type="button" aria-label={m.analysis.copy} disabled={!body.trim()} onClick={() => void copyText(body, m.analysis.copied[kind])}>
+              <Copy size={14} />
+            </button>
+          </div>
+        </div>
         <div className="draft-actions">
-          <button className="btn ghost" type="button" onClick={() => void copyDraft()}>
-            <Copy size={16} /> {m.analysis.copy}
-          </button>
-          <button className="btn ghost" type="button" disabled={busy} onClick={() => void regenerate()}>
+          <button className="btn ghost wide" type="button" disabled={busy} onClick={() => void regenerate()}>
             {busy ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} {subject.trim() || body.trim() ? m.analysis.regenerate : m.analysis.generate}
           </button>
           <button className="btn ghost wide" type="button" onClick={() => void download()}>
             <Download size={16} /> {m.analysis.download}
           </button>
           {subject.trim() || body.trim() ? (
-            mail ? (
-              <a className="btn primary wide" href={mail}>
-                <Mail size={16} /> {m.analysis.openMail}
-              </a>
-            ) : (
-              <p className="fine wide">{m.analysis.tooLong}</p>
-            )
+            <button className="btn primary wide" type="button" onClick={() => void openMail()}>
+              <Mail size={16} /> {m.analysis.openMail}
+            </button>
           ) : null}
         </div>
       </aside>
